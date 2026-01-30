@@ -4,7 +4,7 @@ layout: home
 hero:
   name: 基金宝
   text: 开源的基金实时估值查看工具
-  tagline: 实时估值 · 持仓管理 · K线走势 · 智能提醒
+  tagline: 实时估值 · 持仓管理 · 走势曲线 · 智能提醒
   image:
     src: /hero-image.png
     alt: 基金宝
@@ -22,7 +22,7 @@ features:
     details: 秒级刷新基金实时估值，支持 A股交易时间自动更新
   - icon: 📊
     title: 专业图表
-    details: 分时走势图、K线图，媲美专业交易软件的图表体验
+    details: 分时走势图、曲线图，媲美专业交易软件的图表体验
   - icon: 💰
     title: 持仓管理
     details: 记录买入成本和份额，自动计算持有收益和当日盈亏

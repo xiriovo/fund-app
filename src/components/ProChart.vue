@@ -30,7 +30,7 @@ const activePeriod = ref('1m')
 
 const chartTypes = [
   { key: 'area', label: '分时' },
-  { key: 'kline', label: 'K线' }
+  { key: 'kline', label: '曲线' }
 ]
 
 const periods = [
