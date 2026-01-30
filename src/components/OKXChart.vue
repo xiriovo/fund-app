@@ -500,48 +500,82 @@ function drawChart() {
       ctx.globalAlpha = 1
     }
   } else {
-    // K线图模式：绘制真实蜡烛图
-    // [WHY] K线紧密排列，柱子间隙小
-    const gap = 1 // 柱子间隙
-    const barWidth = Math.max(3, Math.min(12, (chartWidth - gap * data.length) / data.length))
+    // [WHY] 曲线图模式：绘制平滑走势曲线
+    // [WHAT] 用折线连接每日净值，带渐变填充
+    
+    // 计算第一个数据点作为基准（用于判断整体涨跌颜色）
+    const firstValue = data[0]?.value || 0
+    const lastValue = data[data.length - 1]?.value || 0
+    const isOverallUp = lastValue >= firstValue
+    
+    // 绘制填充区域（曲线下方到底部）
+    ctx.beginPath()
+    const chartBottom = mainHeight
+    ctx.moveTo(padding.left, chartBottom)
     
     data.forEach((point, i) => {
-      const x = padding.left + (chartWidth / data.length) * i + barWidth / 2 + gap / 2
-      
-      // [WHY] 模拟OHLC数据：基金只有收盘价，需要模拟开高低
-      const prevValue = i > 0 ? data[i - 1]!.value : point.value
-      const closePrice = point.value
-      const openPrice = prevValue
-      const isBarUp = closePrice >= openPrice
-      
-      // 模拟最高最低价（在开收之间加一些波动）
-      const priceRange = Math.abs(closePrice - openPrice) || closePrice * 0.002
-      const highPrice = Math.max(openPrice, closePrice) + priceRange * 0.3
-      const lowPrice = Math.min(openPrice, closePrice) - priceRange * 0.3
-      
-      // 转换为Y坐标
-      const openY = padding.top + (mainHeight - padding.top) * (1 - (openPrice - minValue) / valueRange)
-      const closeY = padding.top + (mainHeight - padding.top) * (1 - (closePrice - minValue) / valueRange)
-      const highY = padding.top + (mainHeight - padding.top) * (1 - (highPrice - minValue) / valueRange)
-      const lowY = padding.top + (mainHeight - padding.top) * (1 - (lowPrice - minValue) / valueRange)
-      
-      const color = isBarUp ? upColor : downColor
-      
-      // 绘制影线（上下影线）
-      ctx.beginPath()
-      ctx.strokeStyle = color
-      ctx.lineWidth = 1
-      ctx.moveTo(x, highY)
-      ctx.lineTo(x, lowY)
-      ctx.stroke()
-      
-      // 绘制K线实体
-      const bodyTop = Math.min(openY, closeY)
-      const bodyHeight = Math.max(Math.abs(closeY - openY), 1)
-      
-      ctx.fillStyle = color
-      ctx.fillRect(x - barWidth / 2, bodyTop, barWidth, bodyHeight)
+      const x = padding.left + (chartWidth / Math.max(data.length - 1, 1)) * i
+      const y = padding.top + (mainHeight - padding.top) * (1 - (point.value - minValue) / valueRange)
+      if (i === 0) {
+        ctx.lineTo(x, y)
+      } else {
+        ctx.lineTo(x, y)
+      }
     })
+    
+    // 闭合路径
+    const lastX = padding.left + chartWidth
+    ctx.lineTo(lastX, chartBottom)
+    ctx.closePath()
+    
+    // 填充渐变
+    const fillGradient = ctx.createLinearGradient(0, padding.top, 0, chartBottom)
+    if (isOverallUp) {
+      fillGradient.addColorStop(0, 'rgba(246, 70, 93, 0.25)')
+      fillGradient.addColorStop(0.5, 'rgba(246, 70, 93, 0.1)')
+      fillGradient.addColorStop(1, 'rgba(246, 70, 93, 0)')
+    } else {
+      fillGradient.addColorStop(0, 'rgba(14, 203, 129, 0.25)')
+      fillGradient.addColorStop(0.5, 'rgba(14, 203, 129, 0.1)')
+      fillGradient.addColorStop(1, 'rgba(14, 203, 129, 0)')
+    }
+    ctx.fillStyle = fillGradient
+    ctx.fill()
+    
+    // 绘制走势曲线
+    ctx.beginPath()
+    data.forEach((point, i) => {
+      const x = padding.left + (chartWidth / Math.max(data.length - 1, 1)) * i
+      const y = padding.top + (mainHeight - padding.top) * (1 - (point.value - minValue) / valueRange)
+      if (i === 0) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
+    })
+    ctx.strokeStyle = isOverallUp ? upColor : downColor
+    ctx.lineWidth = 2
+    ctx.stroke()
+    
+    // 绘制最新点动画
+    if (data.length > 0) {
+      const lastPoint = data[data.length - 1]!
+      const lastPointX = padding.left + chartWidth
+      const lastPointY = padding.top + (mainHeight - padding.top) * (1 - (lastPoint.value - minValue) / valueRange)
+      
+      // 脉冲点
+      const pulseSize = 3 + Math.sin(Date.now() / 200) * 1.5
+      ctx.beginPath()
+      ctx.arc(lastPointX, lastPointY, pulseSize, 0, Math.PI * 2)
+      ctx.fillStyle = isOverallUp ? upColor : downColor
+      ctx.fill()
+      
+      // 外圈光晕
+      ctx.beginPath()
+      ctx.arc(lastPointX, lastPointY, pulseSize + 3, 0, Math.PI * 2)
+      ctx.strokeStyle = isOverallUp ? upColor : downColor
+      ctx.lineWidth = 1
+      ctx.globalAlpha = 0.4
+      ctx.stroke()
+      ctx.globalAlpha = 1
+    }
   }
   
   // ========== 绘制成交量柱状图（仅K线模式） ==========
