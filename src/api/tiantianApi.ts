@@ -730,13 +730,27 @@ export async function fetchMarketOverview(): Promise<MarketOverview> {
   // [WHAT] 获取持久化缓存
   const persisted = persistCache.get<MarketOverview>(cacheKey)
   
+  // [WHAT] 检测是否是原生 APP 环境（Capacitor WebView）
+  const isNativeApp = !!(window as any).Capacitor?.isNativePlatform?.()
+  
   // [WHAT] 非交易时间直接返回持久化缓存
   if (!isTradingTime() && persisted && persisted.totalUp > 0) {
     console.log('[MarketOverview] 非交易时间，使用缓存数据')
     cache.set(cacheKey, persisted, CACHE_TTL.MARKET_INDEX)
     return persisted
   }
-  console.log('[MarketOverview] 开始获取数据, 交易时间:', isTradingTime())
+  
+  // [WHAT] 移动端优先使用缓存（WebView JSONP 可能受限）
+  // [WHY] Android WebView 可能阻止跨域脚本加载
+  if (isNativeApp && persisted && persisted.totalUp > 0) {
+    console.log('[MarketOverview] 移动端使用缓存数据')
+    cache.set(cacheKey, persisted, CACHE_TTL.MARKET_INDEX)
+    // [NOTE] 仍然尝试后台更新，但立即返回缓存
+    fetchMarketOverviewInBackground(persisted)
+    return persisted
+  }
+  
+  console.log('[MarketOverview] 开始获取数据, 原生环境:', isNativeApp)
   
   // [WHAT] 固定的区间分布
   // [NOTE] 使用 -0.001 作为边界，避免 change=0 被错误分类
@@ -869,6 +883,97 @@ export async function fetchMarketOverview(): Promise<MarketOverview> {
     script.src = `https://fund.eastmoney.com/data/rankhandler.aspx?op=ph&dt=kf&ft=all&rs=&gs=0&sc=zzf&st=desc&sd=2020-01-01&ed=${new Date().toISOString().slice(0,10)}&qdii=&tabSubtype=,,,,,&pi=1&pn=10000&dx=1&v=${Date.now()}`
     document.body.appendChild(script)
   })
+}
+
+/**
+ * [WHAT] 后台静默更新市场概览数据
+ * [WHY] 移动端先返回缓存，后台尝试更新
+ */
+function fetchMarketOverviewInBackground(currentData: MarketOverview): void {
+  const cacheKey = 'market_overview_v2'
+  
+  const scriptId = `bg_overview_${Date.now()}`
+  delete (window as any).rankData
+  
+  const script = document.createElement('script')
+  script.id = scriptId
+  
+  const cleanup = () => {
+    const s = document.getElementById(scriptId)
+    if (s) document.body.removeChild(s)
+  }
+  
+  // [WHAT] 超时自动清理
+  const timeoutId = setTimeout(() => {
+    cleanup()
+  }, 10000)
+  
+  script.onload = () => {
+    setTimeout(() => {
+      cleanup()
+      clearTimeout(timeoutId)
+      
+      try {
+        const rankData = (window as any).rankData
+        if (!rankData?.datas || !Array.isArray(rankData.datas)) return
+        
+        let totalUp = 0
+        let totalDown = 0
+        const ranges: FundDistribution[] = [
+          { range: '≤-5', count: 0, min: -Infinity, max: -5 },
+          { range: '-5~-3', count: 0, min: -5, max: -3 },
+          { range: '-3~-1', count: 0, min: -3, max: -1 },
+          { range: '-1~0', count: 0, min: -1, max: -0.001 },
+          { range: '0~1', count: 0, min: -0.001, max: 1 },
+          { range: '1~3', count: 0, min: 1, max: 3 },
+          { range: '3~5', count: 0, min: 3, max: 5 },
+          { range: '≥5', count: 0, min: 5, max: Infinity }
+        ]
+        
+        rankData.datas.forEach((row: string) => {
+          const cols = row.split(',')
+          let change = parseFloat(cols[6] ?? '0')
+          if (isNaN(change) || cols[6] === '') {
+            change = parseFloat(cols[4] ?? '0') || 0
+          }
+          
+          if (change > 0) totalUp++
+          else if (change < 0) totalDown++
+          
+          for (const r of ranges) {
+            if (change > r.min && change <= r.max) {
+              r.count++
+              break
+            }
+          }
+        })
+        
+        // [WHAT] 只有获取到有效数据才更新缓存
+        if (totalUp > 0 || totalDown > 0) {
+          const now = new Date()
+          const result: MarketOverview = {
+            updateTime: `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+            totalUp,
+            totalDown,
+            distribution: ranges
+          }
+          cache.set(cacheKey, result, CACHE_TTL.MARKET_INDEX)
+          persistCache.set(cacheKey, result)
+          console.log('[MarketOverview] 后台更新成功')
+        }
+      } catch {
+        // 静默失败
+      }
+    }, 100)
+  }
+  
+  script.onerror = () => {
+    cleanup()
+    clearTimeout(timeoutId)
+  }
+  
+  script.src = `https://fund.eastmoney.com/data/rankhandler.aspx?op=ph&dt=kf&ft=all&rs=&gs=0&sc=zzf&st=desc&sd=2020-01-01&ed=${new Date().toISOString().slice(0,10)}&qdii=&tabSubtype=,,,,,&pi=1&pn=10000&dx=1&v=${Date.now()}`
+  document.body.appendChild(script)
 }
 
 // ========== 场外基金涨幅榜 ==========
