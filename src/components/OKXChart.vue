@@ -71,38 +71,17 @@ const filteredData = computed(() => {
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   
-  // [WHY] 当日模式：显示近3天数据（昨天完整 + 今日估值）
+  // [WHY] 当日模式：只显示历史数据（昨日及之前），不使用估值
+  // [NOTE] 等开盘后有真实净值数据才会显示今日
   if (showIntradayChart.value) {
-    // [WHAT] 取最近3天的历史数据作为基础
-    const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
-    let data = chartData.value
-      .filter(item => new Date(item.time) >= threeDaysAgo)
+    // [WHAT] 取最近5天的历史数据
+    const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000)
+    const data = chartData.value
+      .filter(item => new Date(item.time) >= fiveDaysAgo)
       .map((item, i) => ({ 
         ...item, 
         volume: 50 + Math.abs(item.change) * 30 + (i % 5) * 10
       }))
-    
-    // [WHAT] 如果有今日估值，添加或更新今日数据点
-    if (props.realtimeValue > 0) {
-      const lastItem = data[data.length - 1]
-      if (lastItem && lastItem.time === today) {
-        // 更新今日数据
-        data = [...data.slice(0, -1), {
-          ...lastItem,
-          value: props.realtimeValue,
-          change: props.realtimeChange,
-          volume: lastItem.volume
-        }]
-      } else {
-        // 添加今日数据点
-        data = [...data, {
-          time: today,
-          value: props.realtimeValue,
-          change: props.realtimeChange,
-          volume: 50
-        }]
-      }
-    }
     
     // [EDGE] 如果没有数据，返回占位数据
     if (data.length === 0) {
@@ -339,79 +318,63 @@ function drawChart() {
   const now = new Date()
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   
-  // ========== 当日模式：昨日曲线 + 今日点 ==========
-  if (isIntradayMode.value && data.length > 1) {
-    // [WHAT] 分离历史数据和今日数据
-    const todayIndex = data.findIndex(d => d.time === todayStr)
-    const hasToday = todayIndex >= 0
-    const historyData = hasToday ? data.slice(0, todayIndex) : data.slice(0, -1)
-    const todayData = hasToday ? data[todayIndex] : data[data.length - 1]
-    
+  // ========== 当日模式：只显示历史曲线，等待开盘 ==========
+  if (isIntradayMode.value && data.length > 0) {
     // [WHAT] 绘制历史数据曲线（灰色虚线）
-    if (historyData.length > 0) {
-      ctx.beginPath()
-      ctx.setLineDash([4, 4])
-      historyData.forEach((point, i) => {
-        const x = padding.left + (chartWidth / Math.max(data.length - 1, 1)) * i
-        const y = padding.top + (mainHeight - padding.top) * (1 - (point.value - minValue) / valueRange)
-        if (i === 0) ctx.moveTo(x, y)
-        else ctx.lineTo(x, y)
-      })
-      ctx.strokeStyle = colors.textSecondary
-      ctx.lineWidth = 1.5
-      ctx.stroke()
-      ctx.setLineDash([])
-      
-      // [WHAT] 绘制历史数据点
-      historyData.forEach((point, i) => {
-        const x = padding.left + (chartWidth / Math.max(data.length - 1, 1)) * i
-        const y = padding.top + (mainHeight - padding.top) * (1 - (point.value - minValue) / valueRange)
-        ctx.beginPath()
-        ctx.arc(x, y, 3, 0, Math.PI * 2)
-        ctx.fillStyle = colors.textSecondary
-        ctx.fill()
-      })
-    }
+    ctx.beginPath()
+    ctx.setLineDash([4, 4])
+    data.forEach((point, i) => {
+      const x = padding.left + (chartWidth / Math.max(data.length - 1, 1)) * i
+      const y = padding.top + (mainHeight - padding.top) * (1 - (point.value - minValue) / valueRange)
+      if (i === 0) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
+    })
+    ctx.strokeStyle = colors.textSecondary
+    ctx.lineWidth = 1.5
+    ctx.stroke()
+    ctx.setLineDash([])
     
-    // [WHAT] 连接最后一个历史点到今日点
-    if (historyData.length > 0 && todayData) {
-      const lastHistoryIdx = historyData.length - 1
-      const lastHistoryX = padding.left + (chartWidth / Math.max(data.length - 1, 1)) * lastHistoryIdx
-      const lastHistoryY = padding.top + (mainHeight - padding.top) * (1 - (historyData[lastHistoryIdx]!.value - minValue) / valueRange)
-      
-      const todayIdx = hasToday ? todayIndex : data.length - 1
-      const todayX = padding.left + (chartWidth / Math.max(data.length - 1, 1)) * todayIdx
-      const todayY = padding.top + (mainHeight - padding.top) * (1 - (todayData.value - minValue) / valueRange)
-      
-      // 连接线
+    // [WHAT] 绘制历史数据点
+    data.forEach((point, i) => {
+      const x = padding.left + (chartWidth / Math.max(data.length - 1, 1)) * i
+      const y = padding.top + (mainHeight - padding.top) * (1 - (point.value - minValue) / valueRange)
       ctx.beginPath()
-      ctx.moveTo(lastHistoryX, lastHistoryY)
-      ctx.lineTo(todayX, todayY)
-      ctx.strokeStyle = isOverallUp ? upColor : downColor
-      ctx.lineWidth = 2
-      ctx.stroke()
-      
-      // 今日点动画
-      const pulseSize = 4 + Math.sin(Date.now() / 200) * 2
-      ctx.beginPath()
-      ctx.arc(todayX, todayY, pulseSize, 0, Math.PI * 2)
-      ctx.fillStyle = isOverallUp ? upColor : downColor
+      ctx.arc(x, y, 3, 0, Math.PI * 2)
+      ctx.fillStyle = colors.textSecondary
       ctx.fill()
-      
-      ctx.beginPath()
-      ctx.arc(todayX, todayY, pulseSize + 4, 0, Math.PI * 2)
-      ctx.strokeStyle = isOverallUp ? upColor : downColor
-      ctx.lineWidth = 1
-      ctx.globalAlpha = 0.4
-      ctx.stroke()
-      ctx.globalAlpha = 1
-      
-      // 今日净值标签
-      ctx.fillStyle = isOverallUp ? upColor : downColor
-      ctx.font = '10px Arial'
-      ctx.textAlign = 'center'
-      ctx.fillText(todayData.value.toFixed(4), todayX, todayY - 12)
-    }
+    })
+    
+    // [WHAT] 在最后一个点右侧显示"等待开盘"
+    const lastPoint = data[data.length - 1]!
+    const lastX = padding.left + chartWidth
+    const lastY = padding.top + (mainHeight - padding.top) * (1 - (lastPoint.value - minValue) / valueRange)
+    
+    // 绘制虚线延伸到右侧
+    ctx.beginPath()
+    ctx.setLineDash([4, 4])
+    const prevX = padding.left + (chartWidth / Math.max(data.length - 1, 1)) * (data.length - 1)
+    const prevY = padding.top + (mainHeight - padding.top) * (1 - (lastPoint.value - minValue) / valueRange)
+    ctx.moveTo(prevX, prevY)
+    ctx.lineTo(lastX, lastY)
+    ctx.strokeStyle = colors.textSecondary
+    ctx.lineWidth = 1
+    ctx.stroke()
+    ctx.setLineDash([])
+    
+    // 显示"等待开盘"文字
+    ctx.fillStyle = colors.textSecondary
+    ctx.font = '12px Arial'
+    ctx.textAlign = 'center'
+    ctx.fillText('等待开盘', lastX - 40, lastY - 10)
+    
+    // 绘制闪烁的等待点
+    const pulseSize = 3 + Math.sin(Date.now() / 300) * 1.5
+    ctx.beginPath()
+    ctx.arc(lastX, lastY, pulseSize, 0, Math.PI * 2)
+    ctx.fillStyle = colors.textSecondary
+    ctx.globalAlpha = 0.5 + Math.sin(Date.now() / 300) * 0.3
+    ctx.fill()
+    ctx.globalAlpha = 1
   } else {
     // ========== 其他模式：标准曲线图 ==========
     
