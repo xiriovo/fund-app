@@ -648,12 +648,13 @@ export async function fetchMarketOverview(): Promise<MarketOverview> {
   if (cached) return cached
   
   // [WHAT] 固定的区间分布
+  // [NOTE] 使用 -0.001 作为边界，避免 change=0 被错误分类
   const createRanges = (): FundDistribution[] => [
     { range: '≤-5', count: 0, min: -Infinity, max: -5 },
     { range: '-5~-3', count: 0, min: -5, max: -3 },
     { range: '-3~-1', count: 0, min: -3, max: -1 },
-    { range: '-1~0', count: 0, min: -1, max: 0 },
-    { range: '0~1', count: 0, min: 0, max: 1 },
+    { range: '-1~0', count: 0, min: -1, max: -0.001 },  // 不包括0
+    { range: '0~1', count: 0, min: -0.001, max: 1 },    // 包括0
     { range: '1~3', count: 0, min: 1, max: 3 },
     { range: '3~5', count: 0, min: 3, max: 5 },
     { range: '≥5', count: 0, min: 5, max: Infinity }
@@ -693,7 +694,17 @@ export async function fetchMarketOverview(): Promise<MarketOverview> {
           if (rankData?.datas && Array.isArray(rankData.datas)) {
             rankData.datas.forEach((row: string) => {
               const cols = row.split(',')
-              const change = parseFloat(cols[6] ?? '0') || 0
+              // [WHAT] 天天基金 rankhandler 数据格式：
+              // 0:基金代码, 1:基金名称, 2:字母缩写, 3:日期, 4:单位净值, 5:累计净值, 
+              // 6:日涨幅, 7:近1周, 8:近1月, 9:近3月, 10:近6月, 11:近1年...
+              // [NOTE] 日涨幅在第6列（索引为6）
+              let change = parseFloat(cols[6] ?? '0')
+              
+              // [EDGE] 如果第6列不是有效数字，尝试其他可能的列
+              if (isNaN(change) || cols[6] === '') {
+                // 尝试第4列或第5列（不同类型基金格式可能不同）
+                change = parseFloat(cols[4] ?? '0') || parseFloat(cols[5] ?? '0') || 0
+              }
               
               if (change > 0) totalUp++
               else if (change < 0) totalDown++
