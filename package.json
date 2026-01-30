@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@capacitor/android": "^7.4.5",
+    "@capacitor/app": "^7.1.1",
     "@capacitor/core": "^7.0.0",
     "@vant/use": "^1.6.0",
     "lightweight-charts": "^5.1.0",
