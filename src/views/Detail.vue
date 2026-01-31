@@ -54,7 +54,7 @@ const holdingDetails = computed(() => {
   
   const currentPrice = parseFloat(fundInfo.value?.gsz || fundInfo.value?.dwjz || '0')
   const shares = holding.shares || 0
-  const cost = holding.cost || 0
+  const buyNetValue = holding.buyNetValue || 0
   const amount = holding.amount || 0
   
   // 当前市值
@@ -63,9 +63,9 @@ const holdingDetails = computed(() => {
   const profit = currentValue - amount
   // 收益率
   const profitRate = amount > 0 ? (profit / amount) * 100 : 0
-  // 持仓占比（相对于总资产）
-  const totalAsset = holdingStore.summary.totalAsset || 1
-  const ratio = (currentValue / totalAsset) * 100
+  // 持仓占比（相对于总市值）
+  const totalValue = holdingStore.summary.totalValue || 1
+  const ratio = (currentValue / totalValue) * 100
   // 持有天数
   const buyDate = new Date(holding.buyDate || Date.now())
   const today = new Date()
@@ -82,7 +82,7 @@ const holdingDetails = computed(() => {
     ratio,
     profit,
     profitRate,
-    cost,
+    cost: buyNetValue,
     todayProfit,
     yesterdayProfit,
     holdDays
