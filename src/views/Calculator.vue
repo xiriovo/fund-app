@@ -338,10 +338,13 @@ function startInvest() {
 
 .result-card.main {
   grid-column: span 2;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--color-primary);
 }
 
-.result-card.main .card-label,
+.result-card.main .card-label {
+  color: rgba(255, 255, 255, 0.8);
+}
+
 .result-card.main .card-value {
   color: #fff;
 }

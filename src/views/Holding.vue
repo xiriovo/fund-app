@@ -551,11 +551,11 @@ function onDateConfirm({ selectedValues }: { selectedValues: string[] }) {
 
 /* 汇总卡片 */
 .summary-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--bg-secondary);
   margin: 12px;
   padding: 16px;
   border-radius: 12px;
-  color: #fff;
+  border: 1px solid var(--border-color);
 }
 
 .summary-row {
@@ -574,22 +574,23 @@ function onDateConfirm({ selectedValues }: { selectedValues: string[] }) {
 
 .summary-label {
   font-size: 12px;
-  opacity: 0.8;
+  color: var(--text-secondary);
   margin-bottom: 4px;
 }
 
 .summary-value {
   font-size: 18px;
   font-weight: 600;
+  color: var(--text-primary);
 }
 
-/* [WHY] 紫色背景上使用高对比度涨跌色 */
+/* [WHY] 标准涨跌颜色 */
 .summary-value.up {
-  color: #ff6b6b;  /* 红涨 - 更鲜艳 */
+  color: #f56c6c;  /* 红涨 */
 }
 
 .summary-value.down {
-  color: #51cf66;  /* 绿跌 - 更鲜艳 */
+  color: #67c23a;  /* 绿跌 */
 }
 
 /* 列表表头 */

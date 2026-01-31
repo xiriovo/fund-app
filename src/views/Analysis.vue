@@ -171,10 +171,10 @@ function goToTrades() {
               :fill="slice.color"
             />
             <!-- 中心空白圆 - 适配主题 -->
-            <circle cx="100" cy="100" r="50" :fill="themeStore.actualTheme === 'dark' ? '#1a1a2e' : 'white'" />
+            <circle cx="100" cy="100" r="50" :fill="themeStore.actualTheme === 'dark' ? 'var(--bg-secondary)' : 'white'" />
             <!-- 中心文字 - 适配主题 -->
-            <text x="100" y="95" text-anchor="middle" :fill="themeStore.actualTheme === 'dark' ? '#eee' : '#333'" font-size="12">持仓</text>
-            <text x="100" y="115" text-anchor="middle" :fill="themeStore.actualTheme === 'dark' ? '#fff' : '#333'" font-size="14" font-weight="bold">
+            <text x="100" y="95" text-anchor="middle" :fill="themeStore.actualTheme === 'dark' ? 'var(--text-secondary)' : '#666'" font-size="12">持仓</text>
+            <text x="100" y="115" text-anchor="middle" :fill="themeStore.actualTheme === 'dark' ? 'var(--text-primary)' : '#333'" font-size="14" font-weight="bold">
               {{ assetAllocation.length }}只
             </text>
           </svg>
@@ -347,11 +347,11 @@ function goToTrades() {
 
 /* 总资产卡片 */
 .summary-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--bg-secondary);
   margin: 12px;
   padding: 20px;
   border-radius: 12px;
-  color: #fff;
+  border: 1px solid var(--border-color);
 }
 
 .summary-header {
@@ -362,13 +362,14 @@ function goToTrades() {
 .summary-header .label {
   display: block;
   font-size: 14px;
-  opacity: 0.8;
+  color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
 .summary-header .value {
   font-size: 32px;
   font-weight: 600;
+  color: var(--text-primary);
 }
 
 .summary-grid {
@@ -384,18 +385,19 @@ function goToTrades() {
 .item-label {
   display: block;
   font-size: 12px;
-  opacity: 0.8;
+  color: var(--text-secondary);
   margin-bottom: 4px;
 }
 
 .item-value {
   font-size: 16px;
   font-weight: 500;
+  color: var(--text-primary);
 }
 
-/* [WHY] 紫色背景上使用高对比度涨跌色 */
-.item-value.up { color: #ff6b6b; }  /* 红涨 - 更鲜艳 */
-.item-value.down { color: #51cf66; }  /* 绿跌 - 更鲜艳 */
+/* [WHY] 标准涨跌颜色 */
+.item-value.up { color: #f56c6c; }  /* 红涨 */
+.item-value.down { color: #67c23a; }  /* 绿跌 */
 
 /* 区块样式 */
 .section {
