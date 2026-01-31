@@ -270,6 +270,7 @@ export interface SimpleKLineData {
   time: string
   value: number
   change: number
+  volume?: number  // 可选的成交量字段
 }
 
 /**
