@@ -604,6 +604,23 @@ function drawChart() {
     const label = parts.length >= 3 ? `${parts[1]}-${parts[2]}` : point.time.slice(-5)
     ctx.fillText(label, x, height - 5)
   }
+  
+  // [WHAT] 当日模式：显示数据日期提示
+  if (isIntradayMode.value && data.length > 0) {
+    // 获取数据的实际日期
+    const firstPoint = data[0]!
+    const dateStr = firstPoint.time.split(' ')[0] || firstPoint.time
+    const dateParts = dateStr.split('-')
+    const displayDate = dateParts.length >= 3 ? `${dateParts[1]}-${dateParts[2]}` : dateStr
+    
+    // [WHY] 如果数据日期不是今天，显示提示
+    if (!dateStr.includes(todayStr)) {
+      ctx.font = '11px Arial'
+      ctx.textAlign = 'left'
+      ctx.fillStyle = colors.textSecondary
+      ctx.fillText(`最新交易日: ${displayDate}`, padding.left, padding.top - 3)
+    }
+  }
 }
 
 function formatVolume(v: number): string {
