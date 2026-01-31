@@ -72,56 +72,102 @@ const filteredData = computed(() => {
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   
-  // [WHY] 当日模式：只显示昨日 + 今日（如果有）
+  // [WHY] 当日模式：显示昨日分时曲线 + 今日实时（如果有）
+  // [WHAT] 基金没有分时数据API，基于日K线生成模拟分时曲线
   if (showIntradayChart.value) {
-    // [WHAT] 获取所有数据，按时间排序
     const sortedData = [...chartData.value].sort((a, b) => 
       new Date(a.time).getTime() - new Date(b.time).getTime()
     )
     
-    // [WHY] 检查今天是否有数据（收盘后才有）
-    const hasTodayData = sortedData.some(d => d.time === today)
-    
-    // [WHAT] 判断是否在交易时间内有实时数据
-    const hasRealtimeData = props.realtimeValue > 0 && isTradingTime()
-    
-    let data: SimpleKLineData[] = []
-    
-    if (hasTodayData) {
-      // [WHAT] 有今日收盘数据：取昨天和今天
-      const todayIdx = sortedData.findIndex(d => d.time === today)
-      const yesterdayIdx = todayIdx > 0 ? todayIdx - 1 : 0
-      data = sortedData.slice(yesterdayIdx, todayIdx + 1)
-    } else {
-      // [WHAT] 没有今日数据：取最后一天（昨天）
-      if (sortedData.length > 0) {
-        data = [sortedData[sortedData.length - 1]!]
-      }
-      
-      // [WHAT] 如果有实时数据，添加今日点
-      if (hasRealtimeData) {
-        data = [...data, {
-          time: today,
-          value: props.realtimeValue,
-          change: props.realtimeChange
-        }]
-      }
-    }
-    
-    // [WHAT] 添加volume字段
-    data = data.map((item, i) => ({
-      ...item,
-      volume: 50 + Math.abs(item.change) * 30 + (i % 5) * 10
-    }))
-    
-    // [EDGE] 如果没有数据，返回占位数据
-    if (data.length === 0) {
+    if (sortedData.length < 2) {
       return [{
         time: today,
         value: props.lastClose || props.realtimeValue || 1,
         change: 0,
         volume: 50
       }]
+    }
+    
+    // [WHAT] 获取最近两天的数据用于生成分时曲线
+    const lastDay = sortedData[sortedData.length - 1]!
+    const prevDay = sortedData[sortedData.length - 2]!
+    
+    // [WHY] 基于前一天收盘价和当天收盘价，生成一天的分时曲线
+    // [HOW] 使用正弦波叠加模拟真实的日内波动
+    const generateIntradayPoints = (
+      openValue: number, 
+      closeValue: number, 
+      dateStr: string,
+      pointCount: number = 60
+    ): SimpleKLineData[] => {
+      const points: SimpleKLineData[] = []
+      const range = Math.abs(closeValue - openValue)
+      const volatility = range * 0.3 + closeValue * 0.002 // 波动幅度
+      
+      for (let i = 0; i < pointCount; i++) {
+        const progress = i / (pointCount - 1) // 0 到 1
+        
+        // [WHAT] 基础趋势：从开盘价平滑过渡到收盘价
+        const trend = openValue + (closeValue - openValue) * progress
+        
+        // [WHAT] 叠加多个正弦波模拟日内波动
+        const wave1 = Math.sin(progress * Math.PI * 4) * volatility * 0.5
+        const wave2 = Math.sin(progress * Math.PI * 7 + 1) * volatility * 0.3
+        const wave3 = Math.sin(progress * Math.PI * 11 + 2) * volatility * 0.2
+        
+        // [WHY] 最后几个点平滑收敛到收盘价
+        const convergeFactor = progress > 0.85 ? (progress - 0.85) / 0.15 : 0
+        const noise = (wave1 + wave2 + wave3) * (1 - convergeFactor)
+        
+        const value = trend + noise
+        const change = ((value - openValue) / openValue) * 100
+        
+        // [WHAT] 生成时间标签 09:30 - 15:00
+        const hour = Math.floor(9.5 + progress * 5.5)
+        const minute = Math.floor((9.5 + progress * 5.5 - hour) * 60)
+        const timeLabel = `${dateStr} ${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+        
+        points.push({
+          time: timeLabel,
+          value: Number(value.toFixed(4)),
+          change: Number(change.toFixed(2)),
+          volume: 50 + Math.abs(change) * 10 + Math.random() * 20
+        })
+      }
+      return points
+    }
+    
+    // [WHAT] 生成昨日分时曲线
+    const yesterdayPoints = generateIntradayPoints(
+      prevDay.value, 
+      lastDay.value, 
+      lastDay.time,
+      60
+    )
+    
+    // [WHAT] 判断是否在交易时间内有实时数据
+    const hasRealtimeData = props.realtimeValue > 0 && isTradingTime()
+    const hasTodayData = sortedData.some(d => d.time === today)
+    
+    let data = [...yesterdayPoints]
+    
+    // [WHAT] 如果有今日实时数据，添加今日走势
+    if (hasRealtimeData && !hasTodayData) {
+      // 生成今日部分曲线（到当前时间）
+      const nowHour = now.getHours()
+      const nowMinute = now.getMinutes()
+      const tradingProgress = Math.min(1, Math.max(0, 
+        ((nowHour - 9.5) + nowMinute / 60) / 5.5
+      ))
+      const todayPointCount = Math.max(5, Math.floor(tradingProgress * 60))
+      
+      const todayPoints = generateIntradayPoints(
+        lastDay.value,
+        props.realtimeValue,
+        today,
+        todayPointCount
+      )
+      data = [...data, ...todayPoints]
     }
     
     return data
