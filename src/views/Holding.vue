@@ -583,12 +583,13 @@ function onDateConfirm({ selectedValues }: { selectedValues: string[] }) {
   font-weight: 600;
 }
 
+/* [WHY] 紫色背景上使用高对比度涨跌色 */
 .summary-value.up {
-  color: #ffcccc;
+  color: #ff6b6b;  /* 红涨 - 更鲜艳 */
 }
 
 .summary-value.down {
-  color: #90EE90;
+  color: #51cf66;  /* 绿跌 - 更鲜艳 */
 }
 
 /* 列表表头 */

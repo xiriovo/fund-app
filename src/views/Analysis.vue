@@ -170,11 +170,11 @@ function goToTrades() {
               :d="slice.path"
               :fill="slice.color"
             />
-            <!-- 中心空白圆 -->
-            <circle cx="100" cy="100" r="50" fill="white" />
-            <!-- 中心文字 -->
-            <text x="100" y="95" text-anchor="middle" fill="#333" font-size="12">持仓</text>
-            <text x="100" y="115" text-anchor="middle" fill="#333" font-size="14" font-weight="bold">
+            <!-- 中心空白圆 - 适配主题 -->
+            <circle cx="100" cy="100" r="50" :fill="themeStore.actualTheme === 'dark' ? '#1a1a2e' : 'white'" />
+            <!-- 中心文字 - 适配主题 -->
+            <text x="100" y="95" text-anchor="middle" :fill="themeStore.actualTheme === 'dark' ? '#eee' : '#333'" font-size="12">持仓</text>
+            <text x="100" y="115" text-anchor="middle" :fill="themeStore.actualTheme === 'dark' ? '#fff' : '#333'" font-size="14" font-weight="bold">
               {{ assetAllocation.length }}只
             </text>
           </svg>
@@ -393,8 +393,9 @@ function goToTrades() {
   font-weight: 500;
 }
 
-.item-value.up { color: #ffcccc; }
-.item-value.down { color: #90EE90; }
+/* [WHY] 紫色背景上使用高对比度涨跌色 */
+.item-value.up { color: #ff6b6b; }  /* 红涨 - 更鲜艳 */
+.item-value.down { color: #51cf66; }  /* 绿跌 - 更鲜艳 */
 
 /* 区块样式 */
 .section {
