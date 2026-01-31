@@ -219,13 +219,38 @@ async function fetchFundListFromRemote(): Promise<FundInfo[]> {
  */
 export async function searchFund(
   keyword: string,
-  limit = 20
+  limit = 50
 ): Promise<FundInfo[]> {
   const list = await fetchFundList()
   if (!keyword.trim()) {
     return []
   }
   const kw = keyword.toLowerCase().trim()
+  
+  // [WHAT] 板块名称到基金关键词的映射（扩展版）
+  const sectorKeywords: Record<string, string[]> = {
+    '农牧饲渔': ['农业', '养殖', '畜牧', '渔业', '饲料', '农产品', '种植', '粮食'],
+    '造纸印刷': ['造纸', '印刷', '纸业', '包装', '纸'],
+    '通信设备': ['通信', '5G', '设备', '网络', '互联网', '信息'],
+    '装修装饰': ['装修', '装饰', '建材', '家居', '家装', '家电', '地产', '建筑', '房地产', '基建'],
+    '电子化学品': ['电子', '化学', '化工', '材料', '新材料'],
+    '旅游酒店': ['旅游', '酒店', '餐饮', '消费', '休闲', '服务'],
+    '医药生物': ['医药', '生物', '医疗', '健康', '制药', '创新药'],
+    '新能源': ['新能源', '光伏', '锂电', '风电', '储能', '电池', '太阳能'],
+    '半导体': ['半导体', '芯片', '集成电路', '科技', '电子'],
+    '白酒': ['白酒', '酒', '消费', '食品饮料'],
+    '银行': ['银行', '金融'],
+    '证券': ['证券', '券商', '金融'],
+    '保险': ['保险', '金融'],
+    '房地产': ['房地产', '地产', '房产', '建筑', '基建'],
+    '汽车': ['汽车', '新能源车', '智能汽车', '车'],
+    '军工': ['军工', '国防', '航空', '航天'],
+    '钢铁': ['钢铁', '有色', '金属'],
+    '煤炭': ['煤炭', '能源', '煤'],
+  }
+  
+  // [WHAT] 检查是否是板块名称
+  const mappedKeywords = sectorKeywords[kw]
   
   // [WHAT] 先尝试完整匹配
   let results = list.filter(
@@ -235,48 +260,39 @@ export async function searchFund(
       item.pinyin.toLowerCase().includes(kw)
   )
   
-  // [WHY] 如果完整匹配无结果，尝试拆分关键词匹配
-  // [HOW] 将搜索词拆分成单个字，匹配包含任意关键字的基金
-  if (results.length === 0 && kw.length >= 2) {
-    // [WHAT] 板块名称到基金关键词的映射
-    const sectorKeywords: Record<string, string[]> = {
-      '农牧饲渔': ['农业', '养殖', '畜牧', '渔业', '饲料', '农产品'],
-      '造纸印刷': ['造纸', '印刷', '纸业', '包装'],
-      '通信设备': ['通信', '5G', '设备', '网络'],
-      '装修装饰': ['装修', '装饰', '建材', '家居'],
-      '电子化学品': ['电子', '化学', '化工', '材料'],
-      '旅游酒店': ['旅游', '酒店', '餐饮', '消费'],
-      '医药生物': ['医药', '生物', '医疗', '健康'],
-      '新能源': ['新能源', '光伏', '锂电', '风电'],
-      '半导体': ['半导体', '芯片', '集成电路'],
-      '白酒': ['白酒', '酒', '消费'],
-      '银行': ['银行', '金融'],
-      '证券': ['证券', '券商'],
-      '保险': ['保险'],
-      '房地产': ['房地产', '地产', '房产'],
-      '汽车': ['汽车', '新能源车'],
-      '军工': ['军工', '国防', '航空'],
-      '钢铁': ['钢铁', '有色'],
-      '煤炭': ['煤炭', '能源'],
-    }
-    
-    // [WHAT] 检查是否是板块名称，使用对应关键词搜索
-    const mappedKeywords = sectorKeywords[kw]
-    if (mappedKeywords) {
-      results = list.filter((item) => {
-        const name = item.name.toLowerCase()
-        return mappedKeywords.some(k => name.includes(k.toLowerCase()))
-      })
-    } else {
-      // [WHAT] 拆分成单个字符进行匹配
-      const chars = kw.split('')
-      results = list.filter((item) => {
-        const name = item.name.toLowerCase()
-        // [HOW] 匹配包含任意一个字符的基金（至少匹配2个字符）
-        const matchCount = chars.filter(c => name.includes(c)).length
-        return matchCount >= Math.min(2, chars.length)
-      })
-    }
+  // [WHY] 如果是板块名称，用关键词补充搜索结果
+  if (mappedKeywords) {
+    const keywordResults = list.filter((item) => {
+      const name = item.name.toLowerCase()
+      return mappedKeywords.some(k => name.includes(k.toLowerCase()))
+    })
+    // [WHAT] 合并结果，去重
+    const existingCodes = new Set(results.map(r => r.code))
+    keywordResults.forEach(item => {
+      if (!existingCodes.has(item.code)) {
+        results.push(item)
+        existingCodes.add(item.code)
+      }
+    })
+  }
+  
+  // [WHY] 如果结果还是很少，尝试拆分关键词匹配
+  if (results.length < 10 && kw.length >= 2 && !mappedKeywords) {
+    const chars = kw.split('')
+    const charResults = list.filter((item) => {
+      const name = item.name.toLowerCase()
+      // [HOW] 匹配包含任意一个字符的基金（至少匹配2个字符）
+      const matchCount = chars.filter(c => name.includes(c)).length
+      return matchCount >= Math.min(2, chars.length)
+    })
+    // [WHAT] 合并结果，去重
+    const existingCodes = new Set(results.map(r => r.code))
+    charResults.forEach(item => {
+      if (!existingCodes.has(item.code)) {
+        results.push(item)
+        existingCodes.add(item.code)
+      }
+    })
   }
   
   return results.slice(0, limit)
