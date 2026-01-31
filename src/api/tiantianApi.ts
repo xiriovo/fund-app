@@ -1216,6 +1216,7 @@ export interface NewsItem {
 /**
  * 获取财经资讯列表
  * [WHY] 从东方财富获取基金/财经相关新闻
+ * [HOW] 使用 JSONP 绕过 CORS 限制
  */
 export async function fetchFinanceNews(pageSize = 10): Promise<NewsItem[]> {
   const cacheKey = `finance_news_${pageSize}`
@@ -1223,17 +1224,37 @@ export async function fetchFinanceNews(pageSize = 10): Promise<NewsItem[]> {
   if (cached) return cached
   
   try {
-    // [WHAT] 东方财富财经快讯接口
-    const url = `https://np-listapi.eastmoney.com/comm/wap/getListInfo?cb=callback&client=wap&type=5&mession=&pageSize=${pageSize}&pageIndex=0&_=${Date.now()}`
+    // [WHAT] 使用 JSONP 方式请求东方财富财经快讯
+    const callbackName = `newsCallback_${Date.now()}`
+    const url = `https://np-listapi.eastmoney.com/comm/wap/getListInfo?cb=${callbackName}&client=wap&type=5&mession=&pageSize=${pageSize}&pageIndex=0&_=${Date.now()}`
     
-    const response = await fetch(url)
-    const text = await response.text()
+    const data = await new Promise<any>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        cleanup()
+        reject(new Error('timeout'))
+      }, 8000)
+      
+      const cleanup = () => {
+        clearTimeout(timeout)
+        delete (window as any)[callbackName]
+        script.remove()
+      }
+      
+      ;(window as any)[callbackName] = (data: any) => {
+        cleanup()
+        resolve(data)
+      }
+      
+      const script = document.createElement('script')
+      script.src = url
+      script.onerror = () => {
+        cleanup()
+        reject(new Error('script error'))
+      }
+      document.head.appendChild(script)
+    })
     
-    // [WHAT] 解析 JSONP 响应
-    const jsonStr = text.replace(/^callback\(/, '').replace(/\);?$/, '')
-    const data = JSON.parse(jsonStr)
-    
-    if (!data?.data?.list) return []
+    if (!data?.data?.list) return getDefaultNews()
     
     const news: NewsItem[] = data.data.list.map((item: any) => ({
       id: item.art_uniqueUrl || item.art_code || String(Date.now()),
@@ -1247,7 +1268,7 @@ export async function fetchFinanceNews(pageSize = 10): Promise<NewsItem[]> {
     cache.set(cacheKey, news, 300000) // 5分钟缓存
     return news
   } catch {
-    // [WHAT] 备用：返回模拟热点
+    // [WHAT] 备用：返回默认资讯
     return getDefaultNews()
   }
 }
