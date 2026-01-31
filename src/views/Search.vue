@@ -61,13 +61,22 @@ async function doSearch(kw: string) {
     searchResults.value = results
     
     // [WHY] 异步获取涨跌幅数据，不阻塞搜索结果显示
-    // [HOW] 并行请求前10个基金的实时估值，避免请求过多
-    const topResults = results.slice(0, 10)
-    topResults.forEach(async (fund, index) => {
+    // [HOW] 并行请求前10个支持估值的基金
+    // [EDGE] 过滤掉不支持估值的类型：期货、ETF联接、QDII、FOF
+    const unsupportedTypes = ['期货', 'QDII', 'FOF', '联接', '其他']
+    const supportedResults = results.filter(f => 
+      !unsupportedTypes.some(t => f.type.includes(t) || f.name.includes(t))
+    ).slice(0, 10)
+    
+    supportedResults.forEach(async (fund) => {
       try {
         const estimate = await fetchFundEstimateFast(fund.code)
-        if (estimate && searchResults.value[index]?.code === fund.code) {
-          searchResults.value[index]!.gszzl = estimate.gszzl
+        if (estimate?.gszzl) {
+          // [WHAT] 找到对应的结果并更新
+          const idx = searchResults.value.findIndex(r => r.code === fund.code)
+          if (idx !== -1) {
+            searchResults.value[idx]!.gszzl = estimate.gszzl
+          }
         }
       } catch {
         // 忽略单个基金获取失败

@@ -76,20 +76,18 @@ function initJsonpCallback() {
   
   ;(window as any).jsonpgz = (data: any) => {
     // [WHY] 防御性检查：data 或 fundcode 可能为 undefined
+    // [EDGE] 某些基金类型（ETF联接、期货）不支持估值，会返回 undefined
     if (!data || !data.fundcode) {
-      console.warn('[JSONP] 收到无效数据:', data)
-      return
+      return  // 静默忽略，不输出警告
     }
-    console.log('[JSONP] 收到数据:', data.fundcode, data.name)
     const index = pendingRequests.findIndex(req => req.code === data.fundcode)
     if (index !== -1) {
       const req = pendingRequests[index]!
       clearTimeout(req.timeout)
       pendingRequests.splice(index, 1)
       req.resolve(data)
-    } else {
-      console.warn('[JSONP] 未找到匹配请求:', data.fundcode, '待处理:', pendingRequests.map(r => r.code))
     }
+    // [NOTE] 未匹配的响应静默忽略，可能是重复响应或超时后的响应
   }
 }
 
