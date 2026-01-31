@@ -1,23 +1,23 @@
 <script setup lang="ts">
-// [WHY] 基金详情页 - 专业交易所风格
-// [WHAT] 深色主题、专业K线图、实时价格面板、成交量柱状图
-// [HOW] Canvas绘制专业图表，秒级数据更新
+// [WHY] 基金详情页 - 专业基金APP风格
+// [WHAT] 蓝色顶部、持仓数据、分时图、关联板块、底部操作栏
+// [REF] 参考蚂蚁基金/天天基金的专业设计
 
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useFundStore } from '@/stores/fund'
-import { useThemeStore } from '@/stores/theme'
+import { useHoldingStore } from '@/stores/holding'
 import { fetchStockHoldings, detectShareClass } from '@/api/fund'
 import { fetchFundEstimateFast } from '@/api/fundFast'
-import { fetchPeriodReturnExt, fetchSimilarFunds, type PeriodReturnExt, type SimilarFund } from '@/api/tiantianApi'
+import { fetchPeriodReturnExt, fetchSimilarFunds, fetchSectorFunds, type PeriodReturnExt, type SimilarFund, type SectorInfo } from '@/api/tiantianApi'
 import type { FundEstimate, StockHolding, FundShareClass } from '@/types/fund'
-import { showToast } from 'vant'
+import { showToast, showConfirmDialog } from 'vant'
 import ProChart from '@/components/OKXChart.vue'
 
 const route = useRoute()
 const router = useRouter()
 const fundStore = useFundStore()
-const themeStore = useThemeStore()
+const holdingStore = useHoldingStore()
 
 // [WHAT] 基金代码
 const fundCode = computed(() => route.params.code as string)
@@ -27,33 +27,82 @@ const fundInfo = ref<FundEstimate | null>(null)
 const stockHoldings = ref<StockHolding[]>([])
 const periodReturns = ref<PeriodReturnExt[]>([])
 const similarFunds = ref<SimilarFund[]>([])
+const sectorInfo = ref<SectorInfo | null>(null)
 const isLoading = ref(true)
 const shareClass = ref<FundShareClass>('A')
 
 // [WHAT] 实时刷新
 let refreshTimer: ReturnType<typeof setInterval> | null = null
-const lastUpdateTime = ref('')
 
-// [WHAT] 24小时模拟数据（基金用昨收和估值）
-const high24h = ref(0)
-const low24h = ref(0)
+// [WHAT] Tab切换
+const activeTab = ref<'chart' | 'performance' | 'profit'>('chart')
+
+// [WHAT] 看涨/看跌投票
+const bullCount = ref(41080)
+const bearCount = ref(15942)
+const hasVoted = ref(false)
+
+// [WHAT] 持仓信息（如果已持有）
+const holdingInfo = computed(() => {
+  return holdingStore.holdings.find(h => h.code === fundCode.value) || null
+})
+
+// [WHAT] 持仓详细计算
+const holdingDetails = computed(() => {
+  const holding = holdingInfo.value
+  if (!holding) return null
+  
+  const currentPrice = parseFloat(fundInfo.value?.gsz || fundInfo.value?.dwjz || '0')
+  const shares = holding.shares || 0
+  const cost = holding.cost || 0
+  const amount = holding.amount || 0
+  
+  // 当前市值
+  const currentValue = shares * currentPrice
+  // 持有收益
+  const profit = currentValue - amount
+  // 收益率
+  const profitRate = amount > 0 ? (profit / amount) * 100 : 0
+  // 持仓占比（相对于总资产）
+  const totalAsset = holdingStore.summary.totalAsset || 1
+  const ratio = (currentValue / totalAsset) * 100
+  // 持有天数
+  const buyDate = new Date(holding.buyDate || Date.now())
+  const today = new Date()
+  const holdDays = Math.floor((today.getTime() - buyDate.getTime()) / (1000 * 60 * 60 * 24))
+  // 当日收益
+  const changePercent = parseFloat(fundInfo.value?.gszzl || '0')
+  const todayProfit = currentValue * (changePercent / 100)
+  // 昨日收益（模拟）
+  const yesterdayProfit = profit - todayProfit
+  
+  return {
+    amount: currentValue,
+    shares,
+    ratio,
+    profit,
+    profitRate,
+    cost,
+    todayProfit,
+    yesterdayProfit,
+    holdDays
+  }
+})
 
 onMounted(async () => {
+  holdingStore.initHoldings()
   await loadFundData()
   startAutoRefresh()
 })
 
-// [WHY] 监听路由参数变化，同一组件内导航时重新加载数据
+// [WHY] 监听路由参数变化
 watch(fundCode, async (newCode, oldCode) => {
   if (newCode && newCode !== oldCode) {
-    // [WHAT] 清空旧数据
     fundInfo.value = null
     stockHoldings.value = []
     periodReturns.value = []
     similarFunds.value = []
     isLoading.value = true
-    
-    // [WHAT] 重新加载数据
     await loadFundData()
   }
 })
@@ -62,7 +111,6 @@ onUnmounted(() => {
   stopAutoRefresh()
 })
 
-// [WHAT] 1秒刷新
 function startAutoRefresh() {
   refreshTimer = setInterval(async () => {
     const now = new Date()
@@ -75,7 +123,7 @@ function startAutoRefresh() {
     if (hour === 9 && minute < 30) return
     
     await refreshEstimate()
-  }, 1000)
+  }, 3000)
 }
 
 function stopAutoRefresh() {
@@ -89,17 +137,7 @@ async function refreshEstimate() {
   try {
     const estimate = await fetchFundEstimateFast(fundCode.value)
     if (estimate) {
-      const gsz = parseFloat(estimate.gsz) || 0
-      
-      // [WHAT] 更新最高最低
-      if (gsz > 0) {
-        if (high24h.value === 0 || gsz > high24h.value) high24h.value = gsz
-        if (low24h.value === 0 || gsz < low24h.value) low24h.value = gsz
-      }
-      
       fundInfo.value = estimate
-      const now = new Date()
-      lastUpdateTime.value = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`
     }
   } catch {
     // 静默失败
@@ -110,36 +148,15 @@ async function loadFundData() {
   isLoading.value = true
   
   try {
-    // [WHY] 估值数据优先加载，不等待重仓股（重仓股较慢）
-    const estimate = await fetchFundEstimateFast(fundCode.value).catch((err) => {
-      console.warn('估值获取失败:', err)
-      return null
-    })
-    
-    console.log('估值数据:', estimate)
+    const estimate = await fetchFundEstimateFast(fundCode.value).catch(() => null)
     
     if (estimate) {
       fundInfo.value = estimate
       shareClass.value = detectShareClass(fundCode.value, estimate.name)
-      const gsz = parseFloat(estimate.gsz) || 0
-      // [WHY] 今日最高/最低只基于当前估值，不包含昨收
-      // [WHY] 如果估值为0（非交易时间），显示昨收作为参考
-      if (gsz > 0) {
-        high24h.value = gsz
-        low24h.value = gsz
-      } else {
-        // 非交易时间，显示昨收作为参考值
-        const dwjz = parseFloat(estimate.dwjz) || 0
-        high24h.value = dwjz
-        low24h.value = dwjz
-      }
     } else {
-      // [WHY] 估值获取失败时，尝试从基金列表获取基本信息
-      console.warn('未获取到估值数据，尝试从基金列表获取')
       const { searchFund } = await import('@/api/fund')
       const funds = await searchFund(fundCode.value, 1)
       if (funds.length > 0) {
-        // [WHAT] 创建一个基础的 FundEstimate 对象
         fundInfo.value = {
           fundcode: fundCode.value,
           name: funds[0]!.name,
@@ -150,7 +167,6 @@ async function loadFundData() {
         }
         shareClass.value = detectShareClass(fundCode.value, funds[0]!.name)
       } else {
-        // [EDGE] 完全找不到信息，显示基金代码
         fundInfo.value = {
           fundcode: fundCode.value,
           name: `基金 ${fundCode.value}`,
@@ -159,66 +175,41 @@ async function loadFundData() {
           gszzl: '0',
           gztime: '--'
         }
-        shareClass.value = fundCode.value.endsWith('1') || fundCode.value.endsWith('3') ? 'C' : 'A'
       }
     }
     
-    const now = new Date()
-    lastUpdateTime.value = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`
-    
-    // [WHY] 重仓股后台加载，不阻塞页面显示
-    fetchStockHoldings(fundCode.value)
-      .then(holdings => {
-        console.log('重仓股:', holdings)
-        stockHoldings.value = holdings
-      })
-      .catch(err => {
-        console.warn('重仓股获取失败:', err)
-      })
-    
-    // [WHY] 阶段涨幅后台加载
-    fetchPeriodReturnExt(fundCode.value)
-      .then(returns => {
-        periodReturns.value = returns
-      })
-      .catch(() => {})
-    
-    // [WHY] 同类基金后台加载
-    fetchSimilarFunds(fundCode.value)
-      .then(funds => {
-        similarFunds.value = funds
-      })
-      .catch(() => {})
+    // 后台加载其他数据
+    fetchStockHoldings(fundCode.value).then(h => stockHoldings.value = h).catch(() => {})
+    fetchPeriodReturnExt(fundCode.value).then(r => periodReturns.value = r).catch(() => {})
+    fetchSimilarFunds(fundCode.value).then(f => similarFunds.value = f).catch(() => {})
+    fetchSectorFunds().then(s => { if (s.length > 0) sectorInfo.value = s[0]! }).catch(() => {})
       
-  } catch (err) {
-    console.error('加载失败:', err)
-    showToast('加载失败，请下拉刷新重试')
+  } catch {
+    showToast('加载失败')
   } finally {
     isLoading.value = false
   }
 }
 
 // [WHAT] 计算涨跌
-const priceChange = computed(() => {
-  if (!fundInfo.value) return 0
-  const gsz = parseFloat(fundInfo.value.gsz) || 0
-  const dwjz = parseFloat(fundInfo.value.dwjz) || 0
-  return gsz - dwjz
-})
-
 const priceChangePercent = computed(() => {
   return parseFloat(fundInfo.value?.gszzl || '0') || 0
 })
 
 const isUp = computed(() => priceChangePercent.value >= 0)
 
-// [WHAT] 显示价格：优先显示估值，否则显示昨收，都无效显示 '--'
-const displayPrice = computed(() => {
-  if (!fundInfo.value) return '--'
-  const gsz = parseFloat(fundInfo.value.gsz)
-  if (gsz > 0) return gsz.toFixed(4)
-  const dwjz = parseFloat(fundInfo.value.dwjz)
-  if (dwjz > 0) return dwjz.toFixed(4)
+// [WHAT] 近1年收益
+const yearReturn = computed(() => {
+  const item = periodReturns.value.find(p => p.period === '1y')
+  return item?.fundReturn || 0
+})
+
+// [WHAT] 同类排名
+const rankInfo = computed(() => {
+  const item = periodReturns.value.find(p => p.period === '1y')
+  if (item && item.rank > 0) {
+    return `${item.rank}/${item.totalCount}`
+  }
   return '--'
 })
 
@@ -226,13 +217,99 @@ function goBack() {
   router.back()
 }
 
-// [WHAT] 跳转到同类基金详情
-function goToSimilarFund(code: string) {
-  if (!code) {
-    showToast('基金代码无效')
+// [WHAT] 切换到上一只/下一只基金
+function goPrevFund() {
+  const watchlist = fundStore.watchlist
+  const idx = watchlist.findIndex(f => f.code === fundCode.value)
+  if (idx > 0) {
+    router.replace(`/detail/${watchlist[idx - 1]!.code}`)
+  } else {
+    showToast('已是第一只')
+  }
+}
+
+function goNextFund() {
+  const watchlist = fundStore.watchlist
+  const idx = watchlist.findIndex(f => f.code === fundCode.value)
+  if (idx >= 0 && idx < watchlist.length - 1) {
+    router.replace(`/detail/${watchlist[idx + 1]!.code}`)
+  } else {
+    showToast('已是最后一只')
+  }
+}
+
+function goToSearch() {
+  router.push('/search')
+}
+
+// [WHAT] 投票
+function voteBull() {
+  if (hasVoted.value) {
+    showToast('您已投票')
     return
   }
-  // [WHY] 如果点击的是当前基金，提示用户
+  bullCount.value++
+  hasVoted.value = true
+  showToast('看涨 +1')
+}
+
+function voteBear() {
+  if (hasVoted.value) {
+    showToast('您已投票')
+    return
+  }
+  bearCount.value++
+  hasVoted.value = true
+  showToast('看跌 +1')
+}
+
+// [WHAT] 底部操作
+function editHolding() {
+  // 跳转到持仓页编辑
+  router.push('/holding')
+}
+
+function setReminder() {
+  showToast('提醒功能开发中')
+}
+
+function showTransactions() {
+  showToast('交易记录开发中')
+}
+
+async function removeFromWatchlist() {
+  if (!fundStore.isFundInWatchlist(fundCode.value)) {
+    showToast('不在自选中')
+    return
+  }
+  
+  try {
+    await showConfirmDialog({
+      title: '删除自选',
+      message: `确定将 ${fundInfo.value?.name || '该基金'} 从自选中删除？`
+    })
+    await fundStore.removeFund(fundCode.value)
+    showToast('已删除')
+  } catch {
+    // 取消
+  }
+}
+
+async function addToWatchlist() {
+  if (fundStore.isFundInWatchlist(fundCode.value)) {
+    showToast('已在自选中')
+    return
+  }
+  await fundStore.addFund(fundCode.value, fundInfo.value?.name || '')
+  showToast('添加成功')
+}
+
+function showMore() {
+  showToast('更多功能开发中')
+}
+
+// [WHAT] 跳转同类基金
+function goToSimilarFund(code: string) {
   if (code === fundCode.value) {
     showToast('已在当前基金')
     return
@@ -240,498 +317,548 @@ function goToSimilarFund(code: string) {
   router.push(`/detail/${code}`)
 }
 
-async function toggleWatchlist() {
-  if (!fundInfo.value) return
-  if (fundStore.isFundInWatchlist(fundCode.value)) {
-    showToast('已在自选中')
-  } else {
-    await fundStore.addFund(fundCode.value, fundInfo.value.name)
-    showToast('添加成功')
+// [WHAT] 搜索同类基金
+function searchSimilarFunds() {
+  if (sectorInfo.value) {
+    router.push(`/search?q=${encodeURIComponent(sectorInfo.value.name)}`)
   }
 }
 
-// [WHAT] 跳转基金经理页
-function goToManager() {
-  router.push(`/manager/${fundCode.value}`)
+// [WHAT] 格式化数字
+function formatNum(num: number, decimals = 2): string {
+  if (Math.abs(num) >= 10000) {
+    return (num / 10000).toFixed(2) + '万'
+  }
+  return num.toFixed(decimals)
+}
+
+function formatPercent(num: number): string {
+  const prefix = num >= 0 ? '+' : ''
+  return `${prefix}${num.toFixed(2)}%`
 }
 </script>
 
 <template>
-  <div class="pro-detail-page">
-    <!-- 顶部导航栏 -->
-    <div class="pro-header">
-      <div class="header-left" @click="goBack">
-        <van-icon name="arrow-left" size="20" />
+  <div class="detail-page">
+    <!-- 顶部蓝色区域 -->
+    <div class="top-header">
+      <!-- 导航栏 -->
+      <div class="nav-bar">
+        <van-icon name="arrow-left" size="22" color="#fff" @click="goBack" />
+        <van-icon name="arrow-left" size="18" color="rgba(255,255,255,0.7)" @click="goPrevFund" />
+        <div class="nav-title">
+          <div class="fund-name">{{ fundInfo?.name || '加载中...' }}</div>
+          <div class="fund-code">{{ fundCode }}</div>
+        </div>
+        <van-icon name="arrow" size="18" color="rgba(255,255,255,0.7)" @click="goNextFund" />
+        <van-icon name="search" size="22" color="#fff" @click="goToSearch" />
       </div>
-      <div class="header-center">
-        <span class="pair-name">{{ fundInfo?.name?.slice(0, 8) || '基金' }}</span>
-        <span class="pair-tag">{{ shareClass }}类</span>
+      
+      <!-- 核心指标 -->
+      <div class="core-metrics" v-if="!isLoading">
+        <div class="main-change">
+          <div class="change-label">当日涨幅 {{ fundInfo?.gztime?.slice(5, 10) || '--' }}</div>
+          <div class="change-value" :class="isUp ? 'up' : 'down'">
+            {{ formatPercent(priceChangePercent) }}
+          </div>
+        </div>
+        <div class="sub-metrics">
+          <div class="metric-item">
+            <div class="metric-label">近1年</div>
+            <div class="metric-value" :class="yearReturn >= 0 ? 'up' : 'down'">
+              {{ formatPercent(yearReturn) }}
+            </div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-label">持有人数排名</div>
+            <div class="metric-value">{{ rankInfo }}</div>
+          </div>
+        </div>
       </div>
-      <div class="header-right">
-        <!-- 主题切换按钮 -->
-        <van-icon 
-          :name="themeStore.actualTheme === 'dark' ? 'bulb-o' : 'fire-o'" 
-          size="20"
-          class="theme-toggle"
-          @click="themeStore.toggleTheme"
-        />
-        <!-- 收藏按钮 -->
-        <van-icon 
-          :name="fundStore.isFundInWatchlist(fundCode) ? 'star' : 'star-o'" 
-          size="20"
-          :color="fundStore.isFundInWatchlist(fundCode) ? 'var(--color-primary)' : 'var(--text-secondary)'"
-          @click="toggleWatchlist"
-        />
+      <div v-else class="core-metrics loading">
+        <van-loading color="#fff" />
       </div>
     </div>
 
-    <!-- 加载状态 -->
-    <div v-if="isLoading" class="page-loading">
-      <van-loading vertical color="#0ecb81">
-        加载中...
-      </van-loading>
-    </div>
-
-    <template v-else>
-      <!-- 价格信息面板 -->
-      <div class="price-panel">
-        <!-- 主价格 -->
-        <div class="main-price" :class="isUp ? 'up' : 'down'">
-          <span class="price-value">{{ displayPrice }}</span>
-          <span class="price-unit">CNY</span>
+    <!-- 持仓数据区（仅持有时显示） -->
+    <div v-if="holdingDetails" class="holding-panel">
+      <div class="holding-grid">
+        <div class="holding-item">
+          <div class="item-label">持有金额</div>
+          <div class="item-value">{{ formatNum(holdingDetails.amount) }}</div>
         </div>
-        
-        <!-- 涨跌信息 -->
-        <div class="price-change" :class="isUp ? 'up' : 'down'">
-          <span>{{ isUp ? '+' : '' }}{{ priceChange.toFixed(4) }}</span>
-          <span>({{ isUp ? '+' : '' }}{{ priceChangePercent.toFixed(2) }}%)</span>
+        <div class="holding-item">
+          <div class="item-label">持有份额</div>
+          <div class="item-value">{{ formatNum(holdingDetails.shares) }}</div>
         </div>
-
-        <!-- 24小时数据栏 -->
-        <div class="stats-bar">
-          <div class="stat-item">
-            <span class="stat-label">昨收净值</span>
-            <span class="stat-value">{{ fundInfo?.dwjz || '--' }}</span>
+        <div class="holding-item">
+          <div class="item-label">持仓占比</div>
+          <div class="item-value">{{ holdingDetails.ratio.toFixed(2) }}%</div>
+        </div>
+        <div class="holding-item">
+          <div class="item-label">持有收益</div>
+          <div class="item-value" :class="holdingDetails.profit >= 0 ? 'up' : 'down'">
+            {{ formatNum(holdingDetails.profit) }}
           </div>
-          <div class="stat-item">
-            <span class="stat-label">今日最高</span>
-            <span class="stat-value up">{{ high24h > 0 ? high24h.toFixed(4) : '--' }}</span>
+        </div>
+        <div class="holding-item">
+          <div class="item-label">持有收益率</div>
+          <div class="item-value" :class="holdingDetails.profitRate >= 0 ? 'up' : 'down'">
+            {{ formatPercent(holdingDetails.profitRate) }}
           </div>
-          <div class="stat-item">
-            <span class="stat-label">今日最低</span>
-            <span class="stat-value down">{{ low24h > 0 ? low24h.toFixed(4) : '--' }}</span>
+        </div>
+        <div class="holding-item">
+          <div class="item-label">持仓成本</div>
+          <div class="item-value">{{ holdingDetails.cost.toFixed(4) }}</div>
+        </div>
+        <div class="holding-item">
+          <div class="item-label">当日收益</div>
+          <div class="item-value" :class="holdingDetails.todayProfit >= 0 ? 'up' : 'down'">
+            {{ formatNum(holdingDetails.todayProfit) }}
           </div>
-          <div class="stat-item">
-            <span class="stat-label">更新时间</span>
-            <span class="stat-value">{{ lastUpdateTime }}</span>
+        </div>
+        <div class="holding-item">
+          <div class="item-label">昨日收益</div>
+          <div class="item-value" :class="holdingDetails.yesterdayProfit >= 0 ? 'up' : 'down'">
+            {{ formatNum(holdingDetails.yesterdayProfit) }}
           </div>
+        </div>
+        <div class="holding-item">
+          <div class="item-label">持有天数</div>
+          <div class="item-value">{{ holdingDetails.holdDays }}</div>
         </div>
       </div>
+      <div class="holding-collapse">
+        <van-icon name="arrow-up" />
+      </div>
+    </div>
 
-      <!-- 专业图表 -->
+    <!-- Tab切换 -->
+    <div class="tab-bar">
+      <div 
+        class="tab-item" 
+        :class="{ active: activeTab === 'chart' }"
+        @click="activeTab = 'chart'"
+      >
+        关联涨幅
+      </div>
+      <div 
+        class="tab-item" 
+        :class="{ active: activeTab === 'performance' }"
+        @click="activeTab = 'performance'"
+      >
+        业绩走势
+      </div>
+      <div 
+        class="tab-item" 
+        :class="{ active: activeTab === 'profit' }"
+        @click="activeTab = 'profit'"
+      >
+        我的收益
+      </div>
+    </div>
+
+    <!-- 图表区域 -->
+    <div class="chart-section" v-show="activeTab === 'chart'">
+      <div class="chart-header">
+        <span>{{ fundInfo?.gztime?.slice(5, 10) || '--' }}</span>
+        <span class="estimate-tag" :class="isUp ? 'up' : 'down'">
+          估算涨幅 {{ formatPercent(priceChangePercent) }}
+        </span>
+        <span class="data-source">
+          <van-icon name="replay" /> 数据源1
+        </span>
+      </div>
+      
       <ProChart
         :fund-code="fundCode"
         :realtime-value="fundInfo?.gsz ? parseFloat(fundInfo.gsz) : 0"
         :realtime-change="priceChangePercent"
         :last-close="fundInfo?.dwjz ? parseFloat(fundInfo.dwjz) : 0"
       />
-
-      <!-- 重仓股票 -->
-      <div class="holdings-section">
-        <div class="section-header">
-          <span class="section-title">重仓股票</span>
-          <span class="section-tip">TOP10</span>
+      
+      <!-- 看涨/看跌投票 -->
+      <div class="vote-section">
+        <div class="vote-input">
+          <van-icon name="comment-o" />
+          <span>点我发弹幕</span>
         </div>
-        
-        <div v-if="stockHoldings.length > 0" class="holdings-list">
-          <div class="holdings-table-header">
-            <span>股票</span>
-            <span>占比</span>
-            <span>变动</span>
+        <div class="vote-buttons">
+          <div class="vote-btn bull" @click="voteBull">
+            看涨{{ bullCount > 10000 ? (bullCount/10000).toFixed(1) + '万' : bullCount }}人
           </div>
-          <div 
-            v-for="stock in stockHoldings.slice(0, 10)" 
-            :key="stock.stockCode"
-            class="holdings-row"
-          >
-            <div class="stock-cell">
-              <span class="stock-name">{{ stock.stockName }}</span>
-              <span class="stock-code">{{ stock.stockCode }}</span>
-            </div>
-            <span class="ratio-cell">{{ stock.holdingRatio.toFixed(2) }}%</span>
-            <span class="change-cell" :class="stock.changeFromLast.includes('新增') ? 'new' : ''">
-              {{ stock.changeFromLast || '--' }}
+          <div class="vote-btn bear" @click="voteBear">
+            看跌{{ bearCount > 10000 ? (bearCount/10000).toFixed(1) + '万' : bearCount }}人
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 业绩走势（Tab2） -->
+    <div class="performance-section" v-show="activeTab === 'performance'">
+      <div v-if="periodReturns.length > 0" class="period-grid">
+        <div 
+          v-for="item in periodReturns.slice(0, 6)" 
+          :key="item.period"
+          class="period-item"
+        >
+          <div class="period-label">{{ item.label }}</div>
+          <div class="period-return" :class="item.fundReturn >= 0 ? 'up' : 'down'">
+            {{ formatPercent(item.fundReturn) }}
+          </div>
+          <div class="period-rank" v-if="item.rank > 0">
+            <span class="rank-num">{{ item.rank }}</span>/{{ item.totalCount }}
+          </div>
+        </div>
+      </div>
+      <van-empty v-else description="暂无业绩数据" />
+    </div>
+
+    <!-- 我的收益（Tab3） -->
+    <div class="profit-section" v-show="activeTab === 'profit'">
+      <div v-if="holdingDetails" class="profit-chart">
+        <div class="profit-summary">
+          <div class="profit-total">
+            <span class="label">累计收益</span>
+            <span class="value" :class="holdingDetails.profit >= 0 ? 'up' : 'down'">
+              {{ formatNum(holdingDetails.profit) }}
+            </span>
+          </div>
+          <div class="profit-rate">
+            <span class="label">收益率</span>
+            <span class="value" :class="holdingDetails.profitRate >= 0 ? 'up' : 'down'">
+              {{ formatPercent(holdingDetails.profitRate) }}
             </span>
           </div>
         </div>
-        <div v-else class="empty-holdings">
-          暂无重仓股数据
-        </div>
       </div>
+      <van-empty v-else description="暂未持有该基金" />
+    </div>
 
-      <!-- 阶段涨幅排名 -->
-      <div v-if="periodReturns.length > 0" class="period-section">
-        <div class="section-header">
-          <span class="section-title">阶段涨幅</span>
-          <span class="section-tip">同类排名</span>
-        </div>
-        <div class="period-grid">
-          <div 
-            v-for="item in periodReturns.slice(0, 6)" 
-            :key="item.period"
-            class="period-item"
-          >
-            <div class="period-label">{{ item.label }}</div>
-            <div class="period-return" :class="item.fundReturn >= 0 ? 'up' : 'down'">
-              {{ item.fundReturn >= 0 ? '+' : '' }}{{ item.fundReturn.toFixed(2) }}%
-            </div>
-            <div class="period-rank" v-if="item.rank > 0">
-              <span class="rank-num">{{ item.rank }}</span>
-              <span class="rank-total">/{{ item.totalCount }}</span>
-            </div>
-          </div>
-        </div>
+    <!-- 关联板块 -->
+    <div v-if="sectorInfo" class="sector-section" @click="searchSimilarFunds">
+      <div class="sector-info">
+        <span class="sector-label">关联板块：</span>
+        <span class="sector-name">{{ sectorInfo.name }}</span>
+        <span class="sector-change" :class="sectorInfo.dayReturn >= 0 ? 'up' : 'down'">
+          {{ formatPercent(sectorInfo.dayReturn) }}
+        </span>
       </div>
+      <div class="sector-link">
+        {{ similarFunds.length }}只同类基金
+        <van-icon name="arrow" />
+      </div>
+    </div>
 
-      <!-- 同类基金对比 -->
-      <div v-if="similarFunds.length > 0" class="similar-section">
-        <div class="section-header">
-          <span class="section-title">同类基金</span>
-          <span class="section-tip">年涨幅TOP5</span>
-        </div>
-        <div class="similar-list">
-          <div 
-            v-for="fund in similarFunds" 
-            :key="fund.code"
-            class="similar-item"
-            @click="goToSimilarFund(fund.code)"
-          >
-            <div class="similar-info">
-              <div class="similar-name">{{ fund.name }}</div>
-              <div class="similar-code">{{ fund.code }}</div>
-            </div>
-            <div class="similar-return" :class="fund.yearReturn >= 0 ? 'up' : 'down'">
-              {{ fund.yearReturn >= 0 ? '+' : '' }}{{ fund.yearReturn.toFixed(2) }}%
-            </div>
-            <van-icon name="arrow" class="similar-arrow" />
+    <!-- 同类基金 -->
+    <div v-if="similarFunds.length > 0" class="similar-section">
+      <div class="section-header">
+        <span>同类基金</span>
+        <span class="section-tip">年涨幅TOP5</span>
+      </div>
+      <div class="similar-list">
+        <div 
+          v-for="fund in similarFunds.slice(0, 5)" 
+          :key="fund.code"
+          class="similar-item"
+          @click="goToSimilarFund(fund.code)"
+        >
+          <div class="similar-info">
+            <div class="similar-name">{{ fund.name }}</div>
+            <div class="similar-code">{{ fund.code }}</div>
+          </div>
+          <div class="similar-return" :class="fund.yearReturn >= 0 ? 'up' : 'down'">
+            {{ formatPercent(fund.yearReturn) }}
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- 基金信息 -->
-      <div class="info-section">
-        <div class="section-header">
-          <span class="section-title">基金信息</span>
-        </div>
-        <div class="info-grid">
-          <div class="info-item">
-            <span class="info-label">基金代码</span>
-            <span class="info-value">{{ fundCode }}</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">基金类型</span>
-            <span class="info-value">{{ shareClass }}类份额</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">估值时间</span>
-            <span class="info-value">{{ fundInfo?.gztime || '--' }}</span>
-          </div>
-        </div>
-        
-        <!-- 基金经理入口 -->
-        <div class="manager-entry" @click="goToManager">
-          <div class="entry-left">
-            <van-icon name="manager-o" size="20" />
-            <span>基金经理</span>
-          </div>
-          <van-icon name="arrow" size="16" color="var(--text-muted)" />
-        </div>
+    <!-- 底部操作栏 -->
+    <div class="bottom-bar">
+      <div class="bar-item" @click="editHolding">
+        <van-icon name="edit" size="20" />
+        <span>修改持仓</span>
       </div>
-    </template>
+      <div class="bar-item" @click="setReminder">
+        <van-icon name="bell" size="20" />
+        <span>提醒</span>
+      </div>
+      <div class="bar-item" @click="showTransactions">
+        <van-icon name="orders-o" size="20" />
+        <span>交易记录</span>
+      </div>
+      <div class="bar-item" @click="fundStore.isFundInWatchlist(fundCode) ? removeFromWatchlist() : addToWatchlist()">
+        <van-icon :name="fundStore.isFundInWatchlist(fundCode) ? 'star' : 'star-o'" size="20" />
+        <span>{{ fundStore.isFundInWatchlist(fundCode) ? '删自选' : '加自选' }}</span>
+      </div>
+      <div class="bar-item" @click="showMore">
+        <van-icon name="ellipsis" size="20" />
+        <span>更多</span>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
-/* ========== 移动端APP适配 + 主题支持 ========== */
-/* [WHY] 使用CSS变量实现黑白主题切换 */
-
-.pro-detail-page {
+.detail-page {
   min-height: 100vh;
-  min-height: -webkit-fill-available;
   background: var(--bg-primary);
-  color: var(--text-primary);
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  transition: background-color 0.3s, color 0.3s;
+  padding-bottom: 70px;
 }
 
-/* 顶部导航 */
-.pro-header {
+/* ========== 顶部蓝色区域 ========== */
+.top-header {
+  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  padding-top: env(safe-area-inset-top);
+}
+
+.nav-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 12px 16px;
-  padding-top: max(12px, env(safe-area-inset-top));
-  background: var(--bg-primary);
-  border-bottom: 1px solid var(--border-color);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  transition: background-color 0.3s;
-}
-
-.header-left, .header-right {
-  min-width: 44px;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   gap: 12px;
-  color: var(--text-secondary);
-  -webkit-tap-highlight-color: transparent;
-  cursor: pointer;
-  border-radius: 8px;
-  transition: background 0.15s;
 }
 
-.header-left:active, .header-right:active {
-  background: var(--bg-hover);
-}
-
-.header-center {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.nav-title {
   flex: 1;
-  justify-content: center;
-  min-width: 0;
+  text-align: center;
+  color: #fff;
 }
 
-.pair-name {
+.fund-name {
   font-size: 17px;
   font-weight: 600;
-  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 200px;
 }
 
-.pair-tag {
-  padding: 3px 8px;
-  font-size: 11px;
-  background: var(--bg-tertiary);
-  border-radius: 4px;
-  color: var(--text-secondary);
-  flex-shrink: 0;
+.fund-code {
+  font-size: 12px;
+  opacity: 0.8;
+  margin-top: 2px;
 }
 
-.theme-toggle {
-  color: var(--color-primary);
+.core-metrics {
+  padding: 16px 20px 24px;
+  color: #fff;
 }
 
-.page-loading {
+.core-metrics.loading {
   display: flex;
-  align-items: center;
   justify-content: center;
-  min-height: calc(100vh - 70px);
-  background: var(--bg-primary);
+  padding: 40px;
 }
 
-/* 价格面板 */
-.price-panel {
-  padding: 16px;
-  background: var(--bg-primary);
-  border-bottom: 1px solid #1e2329;
-}
-
-.main-price {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-
-.price-value {
-  /* [WHY] 使用vw实现响应式字体 */
-  font-size: clamp(28px, 8vw, 36px);
-  font-weight: 700;
-  font-family: -apple-system, 'SF Mono', 'Roboto Mono', monospace;
-  /* [WHY] 数字等宽对齐 */
-  font-variant-numeric: tabular-nums;
-}
-
-.price-unit {
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-/* [WHY] 红涨绿跌 */
-.main-price.up .price-value { color: var(--color-up); }
-.main-price.down .price-value { color: var(--color-down); }
-
-.price-change {
-  display: flex;
-  gap: 12px;
-  font-size: 15px;
-  font-family: -apple-system, 'SF Mono', 'Roboto Mono', monospace;
-  font-variant-numeric: tabular-nums;
+.main-change {
   margin-bottom: 16px;
 }
 
-/* [WHY] 红涨绿跌 */
-.price-change.up { color: var(--color-up); }
-.price-change.down { color: var(--color-down); }
-
-/* 统计栏 */
-.stats-bar {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
-  gap: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-color);
+.change-label {
+  font-size: 13px;
+  opacity: 0.8;
+  margin-bottom: 4px;
 }
 
-.stat-item {
+.change-value {
+  font-size: 42px;
+  font-weight: 700;
+  font-family: 'DIN Alternate', -apple-system, monospace;
+}
+
+.sub-metrics {
+  display: flex;
+  gap: 40px;
+}
+
+.metric-item {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.stat-label {
+.metric-label {
   font-size: 12px;
-  color: var(--text-secondary);
+  opacity: 0.7;
 }
 
-.stat-value {
-  font-size: 14px;
-  font-family: -apple-system, 'SF Mono', 'Roboto Mono', monospace;
-  font-variant-numeric: tabular-nums;
+.metric-value {
+  font-size: 18px;
+  font-weight: 600;
+  font-family: 'DIN Alternate', -apple-system, monospace;
+}
+
+/* ========== 持仓数据区 ========== */
+.holding-panel {
+  background: var(--bg-secondary);
+  margin: 0 12px;
+  margin-top: -12px;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.holding-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.holding-item {
+  text-align: center;
+}
+
+.item-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.item-value {
+  font-size: 16px;
+  font-weight: 600;
+  font-family: 'DIN Alternate', -apple-system, monospace;
   color: var(--text-primary);
 }
 
-/* [WHY] 红涨绿跌 */
-.stat-value.up { color: var(--color-up); }
-.stat-value.down { color: var(--color-down); }
+.item-value.up { color: #f56c6c; }
+.item-value.down { color: #67c23a; }
 
-/* 重仓股票区域 */
-.holdings-section, .info-section {
-  margin: 12px;
+.holding-collapse {
+  text-align: center;
+  padding-top: 12px;
+  color: var(--text-secondary);
+}
+
+/* ========== Tab切换 ========== */
+.tab-bar {
+  display: flex;
   background: var(--bg-secondary);
+  margin: 12px;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 10px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab-item.active {
+  background: var(--color-primary);
+  color: #fff;
+  font-weight: 500;
+}
+
+/* ========== 图表区域 ========== */
+.chart-section {
+  background: var(--bg-secondary);
+  margin: 0 12px 12px;
   border-radius: 12px;
   overflow: hidden;
 }
 
-.section-header {
+.chart-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.section-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.section-tip {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.holdings-list {
-  padding: 0 16px 16px;
-}
-
-.holdings-table-header {
-  display: grid;
-  grid-template-columns: 1fr minmax(60px, 80px) minmax(60px, 80px);
-  padding: 12px 0;
-  font-size: 12px;
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border-color);
-}
-
-.holdings-row {
-  display: grid;
-  grid-template-columns: 1fr minmax(60px, 80px) minmax(60px, 80px);
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border-color);
-  align-items: center;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.holdings-row:last-child {
-  border-bottom: none;
-}
-
-.holdings-row:active {
-  background: var(--bg-hover);
-}
-
-.stock-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-
-.stock-name {
-  font-size: 14px;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.stock-code {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.ratio-cell {
-  font-size: 14px;
-  font-family: -apple-system, 'SF Mono', 'Roboto Mono', monospace;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-primary);
-  text-align: right;
-}
-
-.change-cell {
+  padding: 12px 16px;
   font-size: 13px;
   color: var(--text-secondary);
-  text-align: right;
+  gap: 12px;
 }
 
-.change-cell.new {
-  color: var(--color-down);
+.estimate-tag {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
 }
 
-.empty-holdings {
-  padding: 48px 16px;
-  text-align: center;
+.estimate-tag.up {
+  background: rgba(245, 108, 108, 0.1);
+  color: #f56c6c;
+}
+
+.estimate-tag.down {
+  background: rgba(103, 194, 58, 0.1);
+  color: #67c23a;
+}
+
+.data-source {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ========== 投票区域 ========== */
+.vote-section {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  gap: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.vote-input {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border-radius: 20px;
+  font-size: 13px;
   color: var(--text-secondary);
-  font-size: 14px;
 }
 
-/* 阶段涨幅 */
-.period-section {
+.vote-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.vote-btn {
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.vote-btn.bull {
+  background: #f56c6c;
+  color: #fff;
+}
+
+.vote-btn.bear {
+  background: #67c23a;
+  color: #fff;
+}
+
+/* ========== 业绩走势 ========== */
+.performance-section, .profit-section {
   background: var(--bg-secondary);
-  margin-bottom: 12px;
+  margin: 0 12px 12px;
+  border-radius: 12px;
+  padding: 16px;
+  min-height: 200px;
 }
 
 .period-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  padding: 12px 16px;
   gap: 12px;
 }
 
 .period-item {
   text-align: center;
-  padding: 12px 8px;
+  padding: 12px;
   background: var(--bg-tertiary);
   border-radius: 8px;
 }
@@ -745,28 +872,113 @@ function goToManager() {
 .period-return {
   font-size: 16px;
   font-weight: 600;
-  font-family: -apple-system, 'SF Mono', monospace;
-  font-variant-numeric: tabular-nums;
-  margin-bottom: 4px;
+  font-family: 'DIN Alternate', -apple-system, monospace;
 }
 
-.period-return.up { color: var(--color-up); }
-.period-return.down { color: var(--color-down); }
+.period-return.up { color: #f56c6c; }
+.period-return.down { color: #67c23a; }
 
 .period-rank {
   font-size: 11px;
   color: var(--text-secondary);
+  margin-top: 4px;
 }
 
 .period-rank .rank-num {
   color: var(--color-primary);
+}
+
+/* ========== 我的收益 ========== */
+.profit-summary {
+  display: flex;
+  justify-content: space-around;
+  padding: 24px 0;
+}
+
+.profit-total, .profit-rate {
+  text-align: center;
+}
+
+.profit-total .label, .profit-rate .label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  display: block;
+}
+
+.profit-total .value, .profit-rate .value {
+  font-size: 24px;
+  font-weight: 700;
+  font-family: 'DIN Alternate', -apple-system, monospace;
+}
+
+.profit-total .value.up, .profit-rate .value.up { color: #f56c6c; }
+.profit-total .value.down, .profit-rate .value.down { color: #67c23a; }
+
+/* ========== 关联板块 ========== */
+.sector-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-secondary);
+  margin: 0 12px 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.sector-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.sector-label {
+  color: var(--text-secondary);
+}
+
+.sector-name {
+  color: var(--text-primary);
   font-weight: 500;
 }
 
-/* 同类对比 */
+.sector-change {
+  font-family: 'DIN Alternate', -apple-system, monospace;
+}
+
+.sector-change.up { color: #f56c6c; }
+.sector-change.down { color: #67c23a; }
+
+.sector-link {
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ========== 同类基金 ========== */
 .similar-section {
   background: var(--bg-secondary);
-  margin-bottom: 12px;
+  margin: 0 12px 12px;
+  border-radius: 12px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 16px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.section-tip {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
 }
 
 .similar-list {
@@ -777,26 +989,22 @@ function goToManager() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 8px;
-  margin: 0 -8px;
+  padding: 12px 0;
   border-bottom: 1px solid var(--border-color);
   cursor: pointer;
-  border-radius: 6px;
-  transition: background 0.2s;
-}
-
-.similar-item:active {
-  background: var(--bg-card-hover);
 }
 
 .similar-item:last-child {
   border-bottom: none;
 }
 
+.similar-item:active {
+  opacity: 0.7;
+}
+
 .similar-info {
   flex: 1;
   overflow: hidden;
-  margin-right: 12px;
 }
 
 .similar-name {
@@ -816,90 +1024,39 @@ function goToManager() {
 .similar-return {
   font-size: 14px;
   font-weight: 600;
-  font-family: -apple-system, 'SF Mono', monospace;
-  font-variant-numeric: tabular-nums;
+  font-family: 'DIN Alternate', -apple-system, monospace;
 }
 
-.similar-return.up { color: var(--color-up); }
-.similar-return.down { color: var(--color-down); }
+.similar-return.up { color: #f56c6c; }
+.similar-return.down { color: #67c23a; }
 
-.similar-arrow {
-  color: var(--text-muted);
-  margin-left: 8px;
-  font-size: 14px;
+/* ========== 底部操作栏 ========== */
+.bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  padding: 8px 0;
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+  z-index: 100;
 }
 
-/* 基金信息 */
-.info-grid {
-  padding: 16px;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-}
-
-.info-item {
+.bar-item {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-}
-
-.info-label {
-  font-size: 13px;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0;
   color: var(--text-secondary);
-}
-
-.info-value {
-  font-size: 14px;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 基金经理入口 */
-.manager-entry {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  border-top: 1px solid var(--border-color);
+  font-size: 11px;
   cursor: pointer;
-  transition: background-color 0.2s;
 }
 
-.manager-entry:active {
-  background: var(--bg-tertiary);
-}
-
-.entry-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--text-primary);
-  font-size: 15px;
-}
-
-/* ========== 响应式适配 ========== */
-@media screen and (max-width: 375px) {
-  /* 小屏手机 */
-  .price-value {
-    font-size: 26px;
-  }
-  
-  .stats-bar {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .holdings-table-header,
-  .holdings-row {
-    grid-template-columns: 1fr 60px 60px;
-  }
-}
-
-/* [WHY] 底部安全区域（iPhone底部横条） */
-@supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .info-section:last-child {
-    margin-bottom: calc(12px + env(safe-area-inset-bottom));
-  }
+.bar-item:active {
+  opacity: 0.7;
 }
 </style>
