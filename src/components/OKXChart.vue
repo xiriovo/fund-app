@@ -401,11 +401,10 @@ function drawChart() {
   } else {
     // ========== 其他模式：标准曲线图 ==========
     
-    // [WHAT] 绘制填充区域（使用平滑贝塞尔曲线）
+    // [WHAT] 绘制填充区域
     ctx.beginPath()
     ctx.moveTo(padding.left, chartBottom)
     
-    // [WHY] 先画底部起点到第一个数据点
     const fillPoints: { x: number, y: number }[] = data.map((point, i) => ({
       x: padding.left + (chartWidth / Math.max(data.length - 1, 1)) * i,
       y: padding.top + (mainHeight - padding.top) * (1 - (point.value - minValue) / valueRange)
@@ -414,23 +413,26 @@ function drawChart() {
     if (fillPoints.length > 0) {
       ctx.lineTo(fillPoints[0]!.x, fillPoints[0]!.y)
       
-      // [WHAT] 使用贝塞尔曲线绘制平滑填充边界
-      for (let i = 1; i < fillPoints.length; i++) {
-        const prev = fillPoints[i - 1]!
-        const curr = fillPoints[i]!
-        
-        if (i === 1) {
-          const cpX = (prev.x + curr.x) / 2
-          const cpY = (prev.y + curr.y) / 2
-          ctx.quadraticCurveTo(prev.x, prev.y, cpX, cpY)
-        } else {
-          const prevPrev = fillPoints[i - 2]!
-          const tension = 0.3
-          const cp1x = prev.x + (curr.x - prevPrev.x) * tension
-          const cp1y = prev.y + (curr.y - prevPrev.y) * tension
-          const cp2x = curr.x - (curr.x - prev.x) * tension
-          const cp2y = curr.y - (curr.y - prev.y) * tension
-          ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, curr.x, curr.y)
+      // [WHY] 点数少于3时使用直线，点数足够时使用贝塞尔曲线
+      if (fillPoints.length < 3) {
+        for (let i = 1; i < fillPoints.length; i++) {
+          ctx.lineTo(fillPoints[i]!.x, fillPoints[i]!.y)
+        }
+      } else {
+        // [HOW] Catmull-Rom样条曲线
+        for (let i = 0; i < fillPoints.length - 1; i++) {
+          const p0 = fillPoints[Math.max(i - 1, 0)]!
+          const p1 = fillPoints[i]!
+          const p2 = fillPoints[i + 1]!
+          const p3 = fillPoints[Math.min(i + 2, fillPoints.length - 1)]!
+          
+          const tension = 6
+          const cp1x = p1.x + (p2.x - p0.x) / tension
+          const cp1y = p1.y + (p2.y - p0.y) / tension
+          const cp2x = p2.x - (p3.x - p1.x) / tension
+          const cp2y = p2.y - (p3.y - p1.y) / tension
+          
+          ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y)
         }
       }
     }
@@ -454,7 +456,7 @@ function drawChart() {
     ctx.fillStyle = fillGradient
     ctx.fill()
     
-    // [WHAT] 绘制平滑走势曲线（使用贝塞尔曲线）
+    // [WHAT] 绘制平滑走势曲线
     ctx.beginPath()
     const points: { x: number, y: number }[] = data.map((point, i) => ({
       x: padding.left + (chartWidth / Math.max(data.length - 1, 1)) * i,
@@ -464,28 +466,28 @@ function drawChart() {
     if (points.length > 0) {
       ctx.moveTo(points[0]!.x, points[0]!.y)
       
-      // [WHY] 使用三次贝塞尔曲线实现平滑弯曲效果
-      // [HOW] 每两个点之间计算控制点，生成平滑曲线
-      for (let i = 1; i < points.length; i++) {
-        const prev = points[i - 1]!
-        const curr = points[i]!
-        
-        if (i === 1) {
-          // 第一段：简单的二次贝塞尔
-          const cpX = (prev.x + curr.x) / 2
-          const cpY = (prev.y + curr.y) / 2
-          ctx.quadraticCurveTo(prev.x, prev.y, cpX, cpY)
-        } else {
-          const prevPrev = points[i - 2]!
-          // [WHAT] 计算平滑控制点
-          // 控制点基于前后点的斜率
-          const tension = 0.3 // 张力系数，越小曲线越平滑
-          const cp1x = prev.x + (curr.x - prevPrev.x) * tension
-          const cp1y = prev.y + (curr.y - prevPrev.y) * tension
-          const cp2x = curr.x - (curr.x - prev.x) * tension
-          const cp2y = curr.y - (curr.y - prev.y) * tension
+      // [WHY] 点数少于3时使用直线，点数足够时使用贝塞尔曲线
+      if (points.length < 3) {
+        // 直线连接
+        for (let i = 1; i < points.length; i++) {
+          ctx.lineTo(points[i]!.x, points[i]!.y)
+        }
+      } else {
+        // [HOW] 使用Catmull-Rom样条曲线，自动生成平滑控制点
+        for (let i = 0; i < points.length - 1; i++) {
+          const p0 = points[Math.max(i - 1, 0)]!
+          const p1 = points[i]!
+          const p2 = points[i + 1]!
+          const p3 = points[Math.min(i + 2, points.length - 1)]!
           
-          ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, curr.x, curr.y)
+          // [WHAT] Catmull-Rom to Bezier转换，生成平滑曲线
+          const tension = 6 // 张力系数
+          const cp1x = p1.x + (p2.x - p0.x) / tension
+          const cp1y = p1.y + (p2.y - p0.y) / tension
+          const cp2x = p2.x - (p3.x - p1.x) / tension
+          const cp2y = p2.y - (p3.y - p1.y) / tension
+          
+          ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y)
         }
       }
     }
