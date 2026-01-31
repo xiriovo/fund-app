@@ -317,18 +317,18 @@ function formatPercent(num: number): string {
 
 <template>
   <div class="detail-page">
-    <!-- 顶部蓝色区域 -->
+    <!-- 顶部区域 -->
     <div class="top-header">
       <!-- 导航栏 -->
       <div class="nav-bar">
-        <van-icon name="arrow-left" size="22" color="#fff" @click="goBack" />
-        <van-icon name="arrow-left" size="18" color="rgba(255,255,255,0.7)" @click="goPrevFund" />
+        <van-icon name="arrow-left" size="22" color="var(--text-primary)" @click="goBack" />
+        <van-icon name="arrow-left" size="18" color="var(--text-secondary)" @click="goPrevFund" />
         <div class="nav-title">
           <div class="fund-name">{{ fundInfo?.name || '加载中...' }}</div>
           <div class="fund-code">{{ fundCode }}</div>
         </div>
-        <van-icon name="arrow" size="18" color="rgba(255,255,255,0.7)" @click="goNextFund" />
-        <van-icon name="search" size="22" color="#fff" @click="goToSearch" />
+        <van-icon name="arrow" size="18" color="var(--text-secondary)" @click="goNextFund" />
+        <van-icon name="search" size="22" color="var(--text-primary)" @click="goToSearch" />
       </div>
       
       <!-- 核心指标 -->
@@ -349,7 +349,7 @@ function formatPercent(num: number): string {
         </div>
       </div>
       <div v-else class="core-metrics loading">
-        <van-loading color="#fff" />
+        <van-loading color="var(--text-secondary)" />
       </div>
     </div>
 
@@ -589,10 +589,11 @@ function formatPercent(num: number): string {
   padding-bottom: 70px;
 }
 
-/* ========== 顶部蓝色区域 ========== */
+/* ========== 顶部区域 ========== */
 .top-header {
-  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  background: var(--bg-secondary);
   padding-top: env(safe-area-inset-top);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .nav-bar {
@@ -605,12 +606,12 @@ function formatPercent(num: number): string {
 .nav-title {
   flex: 1;
   text-align: center;
-  color: #fff;
 }
 
 .fund-name {
   font-size: 17px;
   font-weight: 600;
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -618,13 +619,12 @@ function formatPercent(num: number): string {
 
 .fund-code {
   font-size: 12px;
-  opacity: 0.8;
+  color: var(--text-secondary);
   margin-top: 2px;
 }
 
 .core-metrics {
   padding: 16px 20px 24px;
-  color: #fff;
 }
 
 .core-metrics.loading {
@@ -639,7 +639,7 @@ function formatPercent(num: number): string {
 
 .change-label {
   font-size: 13px;
-  opacity: 0.8;
+  color: var(--text-secondary);
   margin-bottom: 4px;
 }
 
@@ -647,6 +647,15 @@ function formatPercent(num: number): string {
   font-size: 42px;
   font-weight: 700;
   font-family: 'DIN Alternate', -apple-system, monospace;
+  color: var(--text-primary);
+}
+
+.change-value.up {
+  color: #f56c6c;
+}
+
+.change-value.down {
+  color: #67c23a;
 }
 
 .sub-metrics {
@@ -662,13 +671,22 @@ function formatPercent(num: number): string {
 
 .metric-label {
   font-size: 12px;
-  opacity: 0.7;
+  color: var(--text-secondary);
 }
 
 .metric-value {
   font-size: 18px;
   font-weight: 600;
   font-family: 'DIN Alternate', -apple-system, monospace;
+  color: var(--text-primary);
+}
+
+.metric-value.up {
+  color: #f56c6c;
+}
+
+.metric-value.down {
+  color: #67c23a;
 }
 
 /* ========== 持仓数据区 ========== */
