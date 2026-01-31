@@ -1233,62 +1233,102 @@ export interface NewsItem {
 
 /**
  * 获取财经资讯列表
- * [WHY] 从东方财富获取基金/财经相关新闻
- * [HOW] 使用 JSONP 绕过 CORS 限制
+ * [WHY] 从多个数据源获取基金/财经相关新闻
+ * [HOW] 尝试多个API，第一个成功就返回
  */
 export async function fetchFinanceNews(pageSize = 10): Promise<NewsItem[]> {
   const cacheKey = `finance_news_${pageSize}`
   const cached = cache.get<NewsItem[]>(cacheKey)
   if (cached) return cached
   
+  // [WHAT] 尝试东方财富7x24快讯（更活跃）
   try {
-    // [WHAT] 使用 JSONP 方式请求东方财富财经快讯
-    const callbackName = `newsCallback_${Date.now()}`
-    const url = `https://np-listapi.eastmoney.com/comm/wap/getListInfo?cb=${callbackName}&client=wap&type=5&mession=&pageSize=${pageSize}&pageIndex=0&_=${Date.now()}`
+    const news = await fetchEastmoney7x24(pageSize)
+    if (news.length > 0) {
+      cache.set(cacheKey, news, 180000) // 3分钟缓存
+      return news
+    }
+  } catch { /* 继续尝试下一个源 */ }
+  
+  // [WHAT] 备用：东方财富基金资讯
+  try {
+    const news = await fetchEastmoneyFundNews(pageSize)
+    if (news.length > 0) {
+      cache.set(cacheKey, news, 300000)
+      return news
+    }
+  } catch { /* 继续 */ }
+  
+  return getDefaultNews()
+}
+
+// [WHAT] 东方财富7x24快讯（实时性强）
+async function fetchEastmoney7x24(pageSize: number): Promise<NewsItem[]> {
+  const callbackName = `news7x24_${Date.now()}`
+  const url = `https://np-listapi.eastmoney.com/comm/web/getStockNews?cb=${callbackName}&_=${Date.now()}&type=0&pageSize=${pageSize}`
+  
+  const data = await jsonpRequest(url, callbackName, 5000)
+  
+  if (!data?.data?.list) return []
+  
+  return data.data.list.map((item: any) => ({
+    id: String(item.art_id || Date.now() + Math.random()),
+    title: item.title || '',
+    summary: (item.digest || item.title || '').slice(0, 80),
+    source: item.source || '7x24快讯',
+    time: formatNewsTime(item.showtime || ''),
+    url: item.url_unique || ''
+  })).filter((n: NewsItem) => n.title)
+}
+
+// [WHAT] 东方财富基金资讯
+async function fetchEastmoneyFundNews(pageSize: number): Promise<NewsItem[]> {
+  const callbackName = `fundNews_${Date.now()}`
+  const url = `https://np-listapi.eastmoney.com/comm/wap/getListInfo?cb=${callbackName}&client=wap&type=5&pageSize=${pageSize}&pageIndex=0&_=${Date.now()}`
+  
+  const data = await jsonpRequest(url, callbackName, 5000)
+  
+  if (!data?.data?.list) return []
+  
+  return data.data.list.map((item: any) => ({
+    id: item.art_uniqueUrl || String(Date.now() + Math.random()),
+    title: item.title || '',
+    summary: (item.digest || item.title || '').slice(0, 80),
+    source: item.source || '东方财富',
+    time: formatNewsTime(item.showtime || item.time || ''),
+    url: item.url || item.art_uniqueUrl || ''
+  })).filter((n: NewsItem) => n.title)
+}
+
+// [WHAT] 通用JSONP请求函数
+async function jsonpRequest(url: string, callbackName: string, timeout = 8000): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      cleanup()
+      reject(new Error('timeout'))
+    }, timeout)
     
-    const data = await new Promise<any>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        cleanup()
-        reject(new Error('timeout'))
-      }, 8000)
-      
-      const cleanup = () => {
-        clearTimeout(timeout)
-        delete (window as any)[callbackName]
-        script.remove()
-      }
-      
-      ;(window as any)[callbackName] = (data: any) => {
-        cleanup()
-        resolve(data)
-      }
-      
-      const script = document.createElement('script')
-      script.src = url
-      script.onerror = () => {
-        cleanup()
-        reject(new Error('script error'))
-      }
-      document.head.appendChild(script)
-    })
+    const cleanup = () => {
+      clearTimeout(timeoutId)
+      delete (window as any)[callbackName]
+      const s = document.getElementById(`jsonp_${callbackName}`)
+      if (s) s.remove()
+    }
     
-    if (!data?.data?.list) return getDefaultNews()
+    ;(window as any)[callbackName] = (data: any) => {
+      cleanup()
+      resolve(data)
+    }
     
-    const news: NewsItem[] = data.data.list.map((item: any) => ({
-      id: item.art_uniqueUrl || item.art_code || String(Date.now()),
-      title: item.title || '',
-      summary: (item.digest || item.title || '').slice(0, 60),
-      source: item.source || '东方财富',
-      time: formatNewsTime(item.showtime || item.time || ''),
-      url: item.url || item.art_uniqueUrl || ''
-    }))
-    
-    cache.set(cacheKey, news, 300000) // 5分钟缓存
-    return news
-  } catch {
-    // [WHAT] 备用：返回默认资讯
-    return getDefaultNews()
-  }
+    const script = document.createElement('script')
+    script.id = `jsonp_${callbackName}`
+    script.src = url
+    script.onerror = () => {
+      cleanup()
+      reject(new Error('script error'))
+    }
+    document.head.appendChild(script)
+  })
 }
 
 // [WHAT] 格式化资讯时间
