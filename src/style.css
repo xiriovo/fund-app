@@ -3,19 +3,20 @@
 
 /* ========== CSS变量定义 ========== */
 :root {
-  /* 亮色模式变量 */
-  --bg-primary: #f5f5f5;
+  /* 亮色模式变量 - 明亮清爽风格 */
+  --bg-primary: #f0f4f8;
   --bg-secondary: #ffffff;
   --bg-card: #ffffff;
-  --text-primary: #333333;
-  --text-secondary: #666666;
-  --text-tertiary: #999999;
-  --border-color: #f0f0f0;
-  --up-color: #e4393c;
-  --down-color: #1db82c;
-  --primary-color: #1989fa;
-  --gradient-start: #667eea;
-  --gradient-end: #764ba2;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-tertiary: #94a3b8;
+  --border-color: #e2e8f0;
+  --up-color: #ef4444;
+  --down-color: #10b981;
+  --primary-color: #6366f1;
+  --gradient-start: #6366f1;
+  --gradient-end: #a855f7;
+  --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 /* 深色模式变量 */

@@ -589,10 +589,11 @@ function submitAlert() {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: var(--bg-secondary);
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
   position: sticky;
   top: 0;
   z-index: 100;
+  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.08);
 }
 
 .header-left {
@@ -600,9 +601,12 @@ function submitAlert() {
 }
 
 .app-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-primary);
+  font-size: 20px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .search-bar {
@@ -610,12 +614,19 @@ function submitAlert() {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 10px 16px;
   background: var(--bg-primary);
-  border-radius: 20px;
+  border-radius: 24px;
   color: var(--text-secondary);
   font-size: 14px;
   cursor: pointer;
+  border: 1px solid var(--border-color);
+  transition: all 0.2s;
+}
+
+.search-bar:active {
+  border-color: var(--primary-color);
+  background: var(--bg-secondary);
 }
 
 .header-right {
@@ -657,18 +668,19 @@ function submitAlert() {
 
 /* 大盘指数概览 */
 .market-overview {
-  padding: 12px;
+  padding: 16px;
   background: var(--bg-secondary);
-  margin: 8px 12px;
-  border-radius: 12px;
+  margin: 12px;
+  border-radius: 16px;
+  box-shadow: var(--card-shadow, 0 2px 8px rgba(0, 0, 0, 0.06));
 }
 
 .overview-title {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-  font-size: 15px;
+  margin-bottom: 14px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -676,20 +688,26 @@ function submitAlert() {
 .view-more {
   font-size: 12px;
   font-weight: 400;
-  color: var(--text-secondary);
+  color: var(--primary-color);
 }
 
 .index-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  gap: 10px;
 }
 
 .index-item {
   text-align: center;
-  padding: 8px 4px;
-  background: var(--bg-primary);
-  border-radius: 8px;
+  padding: 12px 6px;
+  background: linear-gradient(145deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.index-item:active {
+  transform: scale(0.96);
 }
 
 .index-name {
@@ -725,42 +743,50 @@ function submitAlert() {
 .quick-actions {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  padding: 12px;
-  margin: 0 12px 8px;
+  gap: 10px;
+  padding: 16px;
+  margin: 0 12px 12px;
   background: var(--bg-secondary);
-  border-radius: 12px;
+  border-radius: 16px;
+  box-shadow: var(--card-shadow, 0 2px 8px rgba(0, 0, 0, 0.06));
 }
 
 .action-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 10px 4px;
+  gap: 8px;
+  padding: 12px 4px;
   cursor: pointer;
-  border-radius: 8px;
-  transition: background 0.2s;
+  border-radius: 12px;
+  transition: all 0.2s;
 }
 
 .action-item:active {
   background: var(--bg-primary);
+  transform: scale(0.95);
 }
 
 .action-icon {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-primary);
-  border-radius: 10px;
-  color: var(--color-primary);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
+  border-radius: 14px;
+  color: var(--primary-color);
+  transition: all 0.2s;
+}
+
+.action-item:active .action-icon {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(168, 85, 247, 0.2) 100%);
 }
 
 .action-item span {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 /* 自选基金标题 */
@@ -786,12 +812,13 @@ function submitAlert() {
 .news-section {
   margin: 0 12px 12px;
   background: var(--bg-secondary);
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
+  box-shadow: var(--card-shadow, 0 2px 8px rgba(0, 0, 0, 0.06));
 }
 
 .news-section .section-header {
-  padding: 12px 16px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--border-color);
 }
 

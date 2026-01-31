@@ -35,32 +35,36 @@
 
 /* ========== 浅色主题 ========== */
 [data-theme="light"] {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f5f5f5;
-  --bg-tertiary: #eeeeee;
-  --bg-hover: rgba(0, 0, 0, 0.03);
+  --bg-primary: #f0f4f8;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f8fafc;
+  --bg-hover: rgba(59, 130, 246, 0.08);
   
-  --text-primary: #1a1a1a;
-  --text-secondary: #666666;
-  --text-muted: #999999;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
   
-  --border-color: #e0e0e0;
-  --border-light: #f0f0f0;
+  --border-color: #e2e8f0;
+  --border-light: #f1f5f9;
   
-  /* 涨跌颜色保持不变 */
-  --color-up: #f6465d;
-  --color-down: #0ecb81;
-  --color-up-bg: rgba(246, 70, 93, 0.08);
-  --color-down-bg: rgba(14, 203, 129, 0.08);
+  /* 涨跌颜色 - 更鲜艳 */
+  --color-up: #ef4444;
+  --color-down: #10b981;
+  --color-up-bg: rgba(239, 68, 68, 0.12);
+  --color-down-bg: rgba(16, 185, 129, 0.12);
   
-  /* 强调色 */
-  --color-primary: #f7931a;
-  --color-primary-bg: rgba(247, 147, 26, 0.08);
+  /* 强调色 - 渐变蓝紫 */
+  --color-primary: #6366f1;
+  --color-primary-bg: rgba(99, 102, 241, 0.1);
   
   /* 图表颜色 */
   --chart-bg: #ffffff;
-  --chart-grid: #f0f0f0;
-  --chart-text: #666666;
+  --chart-grid: #f1f5f9;
+  --chart-text: #64748b;
+  
+  /* 卡片阴影 */
+  --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --card-shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
 /* ========== 全局样式应用 ========== */

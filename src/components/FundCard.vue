@@ -115,9 +115,16 @@ function onTouchMove() {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
+  margin: 0 12px 8px;
   background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
-  transition: background-color 0.3s;
+  border-radius: 12px;
+  box-shadow: var(--card-shadow, 0 2px 8px rgba(0, 0, 0, 0.06));
+  transition: all 0.2s;
+}
+
+.fund-card:active {
+  transform: scale(0.98);
+  box-shadow: var(--card-shadow-hover, 0 4px 16px rgba(0, 0, 0, 0.1));
 }
 
 .fund-card.loading {
@@ -130,13 +137,18 @@ function onTouchMove() {
 
 .fund-name {
   font-size: 16px;
+  font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .fund-code {
   font-size: 12px;
   color: var(--text-secondary);
+  background: var(--bg-primary);
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-block;
 }
 
 .fund-value {

@@ -18,7 +18,7 @@ function getSystemTheme(): 'light' | 'dark' {
 }
 
 // [WHAT] 从 localStorage 读取主题设置
-// [WHY] 默认使用 dark 主题，因为基金APP通常在夜间使用
+// [WHY] 默认使用 light 主题，更明亮清爽
 function loadTheme(): ThemeMode {
   try {
     const saved = localStorage.getItem(STORAGE_KEY) as ThemeMode
@@ -28,7 +28,7 @@ function loadTheme(): ThemeMode {
   } catch {
     // ignore
   }
-  return 'dark' // 默认深色主题
+  return 'light' // 默认浅色主题
 }
 
 // [WHAT] 应用主题到 DOM
