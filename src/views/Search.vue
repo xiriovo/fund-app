@@ -156,15 +156,17 @@ function isInWatchlist(code: string): boolean {
 
     <!-- 搜索结果列表 -->
     <div class="search-results">
-      <van-cell
+      <div 
         v-for="fund in searchResults"
         :key="fund.code"
-        :title="fund.name"
-        :label="`${fund.code} · ${fund.type}`"
-        clickable
+        class="fund-item"
         @click="handleAdd(fund)"
       >
-        <template #value>
+        <div class="fund-info">
+          <div class="fund-name">{{ fund.name }}</div>
+          <div class="fund-meta">{{ fund.code }} · {{ fund.type }}</div>
+        </div>
+        <div class="fund-change-col">
           <span 
             v-if="fund.gszzl" 
             class="fund-change" 
@@ -172,12 +174,13 @@ function isInWatchlist(code: string): boolean {
           >
             {{ formatChange(fund.gszzl) }}
           </span>
-        </template>
-        <template #right-icon>
-          <van-tag v-if="isInWatchlist(fund.code)" type="success">已添加</van-tag>
-          <van-icon v-else name="add-o" size="20" color="#1989fa" />
-        </template>
-      </van-cell>
+          <span v-else class="fund-change empty">--</span>
+        </div>
+        <div class="fund-action">
+          <van-tag v-if="isInWatchlist(fund.code)" type="success" size="medium">已添加</van-tag>
+          <van-icon v-else name="add-o" size="22" color="#1989fa" />
+        </div>
+      </div>
 
       <!-- 空状态 -->
       <van-empty
@@ -221,11 +224,53 @@ function isInWatchlist(code: string): boolean {
   font-size: 14px;
 }
 
-/* [WHAT] 涨跌幅数字样式 */
+/* [WHAT] 基金列表项样式 */
+.fund-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color, #ebedf0);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.fund-item:active {
+  background: var(--bg-active, #f2f3f5);
+}
+
+.fund-info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.fund-name {
+  font-size: 15px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.fund-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* [WHAT] 涨跌幅列 - 固定宽度右对齐 */
+.fund-change-col {
+  width: 70px;
+  text-align: right;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
 .fund-change {
   font-size: 14px;
-  font-weight: 500;
-  margin-right: 8px;
+  font-weight: 600;
+  font-family: 'DIN Alternate', 'Roboto Mono', monospace;
 }
 
 .fund-change.up {
@@ -234,5 +279,18 @@ function isInWatchlist(code: string): boolean {
 
 .fund-change.down {
   color: #67c23a;
+}
+
+.fund-change.empty {
+  color: var(--text-tertiary, #c8c9cc);
+}
+
+/* [WHAT] 操作按钮列 */
+.fund-action {
+  width: 56px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
 }
 </style>
