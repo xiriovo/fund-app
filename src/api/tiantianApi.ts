@@ -754,7 +754,7 @@ export interface MarketOverview {
  * [NOTE] 开盘前使用昨天的缓存数据，开盘后更新
  */
 export async function fetchMarketOverview(): Promise<MarketOverview> {
-  const cacheKey = 'market_overview'
+  const cacheKey = 'market_overview_v2'
   
   // [WHAT] 检查内存缓存
   const cached = cache.get<MarketOverview>(cacheKey)
@@ -766,11 +766,20 @@ export async function fetchMarketOverview(): Promise<MarketOverview> {
   // [WHAT] 检测是否是原生 APP 环境（Capacitor WebView）
   const isNativeApp = !!(window as any).Capacitor?.isNativePlatform?.()
   
-  // [WHAT] 非交易时间直接返回持久化缓存
-  if (!isTradingTime() && persisted && persisted.totalUp > 0) {
-    console.log('[MarketOverview] 非交易时间，使用缓存数据')
-    cache.set(cacheKey, persisted, CACHE_TTL.MARKET_INDEX)
-    return persisted
+  // [WHAT] 非交易时间直接返回持久化缓存（周末/节假日/盘前盘后）
+  if (!isTradingTime()) {
+    if (persisted && (persisted.totalUp > 0 || persisted.totalDown > 0)) {
+      console.log('[MarketOverview] 非交易时间，使用缓存数据')
+      cache.set(cacheKey, persisted, CACHE_TTL.MARKET_INDEX)
+      return persisted
+    }
+    // [EDGE] 没有缓存，初始化默认数据
+    initMobileDefaultCache()
+    const defaultData = persistCache.get<MarketOverview>(cacheKey)
+    if (defaultData) {
+      cache.set(cacheKey, defaultData, CACHE_TTL.MARKET_INDEX)
+      return defaultData
+    }
   }
   
   // [WHAT] 移动端优先使用缓存（WebView JSONP 可能受限）
