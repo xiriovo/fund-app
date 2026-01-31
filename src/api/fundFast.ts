@@ -75,7 +75,12 @@ function initJsonpCallback() {
   jsonpInitialized = true
   
   ;(window as any).jsonpgz = (data: any) => {
-    console.log('[JSONP] 收到数据:', data?.fundcode, data?.name)
+    // [WHY] 防御性检查：data 或 fundcode 可能为 undefined
+    if (!data || !data.fundcode) {
+      console.warn('[JSONP] 收到无效数据:', data)
+      return
+    }
+    console.log('[JSONP] 收到数据:', data.fundcode, data.name)
     const index = pendingRequests.findIndex(req => req.code === data.fundcode)
     if (index !== -1) {
       const req = pendingRequests[index]!
@@ -83,7 +88,7 @@ function initJsonpCallback() {
       pendingRequests.splice(index, 1)
       req.resolve(data)
     } else {
-      console.warn('[JSONP] 未找到匹配请求:', data?.fundcode, '待处理:', pendingRequests.map(r => r.code))
+      console.warn('[JSONP] 未找到匹配请求:', data.fundcode, '待处理:', pendingRequests.map(r => r.code))
     }
   }
 }
