@@ -149,7 +149,7 @@ export function fetchFundEstimateFast(code: string): Promise<FundEstimate> {
       
       const script = document.createElement('script')
       script.id = scriptId
-      script.src = `API_ENDPOINT/js/${code}.js?rt=${Date.now()}`
+      script.src = `https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`
       script.onerror = () => {
         // [NOTE] 静默处理脚本加载失败，某些基金类型不支持估值
         cleanup()
@@ -211,7 +211,7 @@ export async function fetchNetValueHistoryFast(code: string, days = 30): Promise
     const script = document.createElement('script')
     script.id = scriptId
     // [WHY] pingzhongdata.js 包含 Data_netWorthTrend 变量
-    script.src = `API_ENDPOINT/pingzhongdata/${code}.js?v=${Date.now()}`
+    script.src = `https://fund.eastmoney.com/pingzhongdata/${code}.js?v=${Date.now()}`
     
     script.onload = () => {
       cleanup()
@@ -385,7 +385,7 @@ export async function fetchMarketIndicesFast(): Promise<MarketIndexSimple[]> {
   
   try {
     // [WHAT] 添加沪深300指数 (1.000300)
-    const url = 'API_ENDPOINT/api/qt/ulist.np/get?fltt=2&secids=1.000001,0.399001,0.399006,1.000300&fields=f2,f3,f4,f12,f14'
+    const url = 'https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&secids=1.000001,0.399001,0.399006,1.000300&fields=f2,f3,f4,f12,f14'
     const response = await fetch(url)
     const data = await response.json()
     
@@ -457,7 +457,7 @@ export async function fetchFundManagerInfo(fundCode: string): Promise<FundManage
     
     const script = document.createElement('script')
     script.id = scriptId
-    script.src = `API_ENDPOINT/pingzhongdata/${fundCode}.js?v=${Date.now()}`
+    script.src = `https://fund.eastmoney.com/pingzhongdata/${fundCode}.js?v=${Date.now()}`
     
     script.onload = () => {
       cleanup()
@@ -543,7 +543,7 @@ export async function fetchFundRankingFast(
   
   try {
     // [WHY] 使用push2接口获取场内基金排行（ETF/LOF等）
-    const url = `API_ENDPOINT/api/qt/clist/get?pn=1&pz=${pageSize}&po=${order}&np=1&fltt=2&invt=2&fid=f3&fs=b:MK0021&fields=f2,f3,f4,f12,f14&_=${Date.now()}`
+    const url = `https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=${pageSize}&po=${order}&np=1&fltt=2&invt=2&fid=f3&fs=b:MK0021&fields=f2,f3,f4,f12,f14&_=${Date.now()}`
     
     const response = await fetch(url)
     const data = await response.json()
@@ -591,7 +591,7 @@ export async function fetchManagerProfit(fundCode: string): Promise<ManagerProfi
     
     const script = document.createElement('script')
     script.id = scriptId
-    script.src = `API_ENDPOINT/pingzhongdata/${fundCode}.js?v=${Date.now()}`
+    script.src = `https://fund.eastmoney.com/pingzhongdata/${fundCode}.js?v=${Date.now()}`
     
     script.onload = () => {
       cleanup()
@@ -644,6 +644,372 @@ export async function fetchManagerProfit(fundCode: string): Promise<ManagerProfi
       cleanup()
       resolve([])
     }
+    
+    function cleanup() {
+      clearTimeout(timeout)
+      const s = document.getElementById(scriptId)
+      if (s) document.body.removeChild(s)
+    }
+    
+    document.body.appendChild(script)
+  })
+}
+
+// ========== 全球指数 ==========
+
+/**
+ * 全球指数数据结构
+ */
+export interface GlobalIndex {
+  name: string
+  code: string
+  price: number
+  change: number
+  changePercent: number
+  region: 'cn' | 'hk' | 'us' | 'eu' | 'asia'
+}
+
+/**
+ * 获取全球主要指数行情
+ * [WHY] 帮助投资者了解全球市场走势
+ * [DEPS] 使用东方财富 push2 接口
+ */
+export async function fetchGlobalIndices(): Promise<GlobalIndex[]> {
+  const cacheKey = 'global_indices'
+  const cached = cache.get<GlobalIndex[]>(cacheKey)
+  if (cached) return cached
+  
+  // [WHAT] 东方财富全球指数代码
+  // 格式: 市场代码.指数代码
+  const indices = [
+    { code: '1.000001', name: '上证指数', region: 'cn' as const },
+    { code: '0.399001', name: '深证成指', region: 'cn' as const },
+    { code: '0.399006', name: '创业板指', region: 'cn' as const },
+    { code: '100.HSI', name: '恒生指数', region: 'hk' as const },
+    { code: '100.DJIA', name: '道琼斯', region: 'us' as const },
+    { code: '100.NDX', name: '纳斯达克', region: 'us' as const },
+    { code: '100.SPX', name: '标普500', region: 'us' as const },
+    { code: '100.N225', name: '日经225', region: 'asia' as const },
+  ]
+  
+  const results: GlobalIndex[] = []
+  
+  try {
+    const codes = indices.map(i => i.code).join(',')
+    const callbackName = `globalIdx_${Date.now()}`
+    
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => { cleanup(); resolve() }, 8000)
+      
+      // [WHAT] 设置 JSONP 回调
+      ;(window as any)[callbackName] = (data: any) => {
+        cleanup()
+        try {
+          if (data?.data?.diff) {
+            data.data.diff.forEach((item: any, idx: number) => {
+              if (indices[idx] && item.f2 > 0) {
+                results.push({
+                  name: indices[idx].name,
+                  code: indices[idx].code,
+                  price: item.f2 / 100,  // 价格需要除以100
+                  change: item.f4 / 100, // 涨跌额
+                  changePercent: item.f3 / 100, // 涨跌幅
+                  region: indices[idx].region
+                })
+              }
+            })
+          }
+        } catch { /* ignore */ }
+        resolve()
+      }
+      
+      const script = document.createElement('script')
+      script.id = callbackName
+      // [DEPS] 东方财富行情接口
+      script.src = `https://push2.eastmoney.com/api/qt/ulist.np/get?secids=${codes}&fields=f2,f3,f4,f12,f14&cb=${callbackName}&_=${Date.now()}`
+      
+      script.onerror = () => { cleanup(); resolve() }
+      
+      function cleanup() {
+        clearTimeout(timeout)
+        const s = document.getElementById(callbackName)
+        if (s) document.body.removeChild(s)
+        try { delete (window as any)[callbackName] } catch { /* */ }
+      }
+      
+      document.body.appendChild(script)
+    })
+    
+    if (results.length === 0) return getDefaultGlobalIndices()
+    
+    cache.set(cacheKey, results, CACHE_TTL.MARKET_INDEX)
+    return results
+  } catch {
+    return getDefaultGlobalIndices()
+  }
+}
+
+function getDefaultGlobalIndices(): GlobalIndex[] {
+  return [
+    { name: '上证指数', code: 's_sh000001', price: 0, change: 0, changePercent: 0, region: 'cn' },
+    { name: '深证成指', code: 's_sz399001', price: 0, change: 0, changePercent: 0, region: 'cn' },
+    { name: '恒生指数', code: 'rt_hkHSI', price: 0, change: 0, changePercent: 0, region: 'hk' },
+    { name: '道琼斯', code: 'gb_$dji', price: 0, change: 0, changePercent: 0, region: 'us' },
+    { name: '纳斯达克', code: 'gb_$ixic', price: 0, change: 0, changePercent: 0, region: 'us' },
+    { name: '日经225', code: 'int_nikkei', price: 0, change: 0, changePercent: 0, region: 'asia' },
+  ]
+}
+
+// ========== 行业配置 ==========
+
+/**
+ * 行业配置数据
+ */
+export interface IndustryAllocation {
+  name: string      // 行业名称
+  ratio: number     // 占比 %
+  color: string     // 饼图颜色
+}
+
+/**
+ * 资产配置数据
+ */
+export interface AssetAllocation {
+  stock: number     // 股票占比 %
+  bond: number      // 债券占比 %
+  cash: number      // 现金占比 %
+  other: number     // 其他占比 %
+}
+
+/**
+ * 基金评级数据
+ */
+export interface FundRating {
+  rating: number           // 综合评级 1-5
+  riskLevel: string        // 风险等级
+  sharpeRatio: number      // 夏普比率
+  maxDrawdown: number      // 最大回撤 %
+  volatility: number       // 波动率 %
+  rankInSimilar: string    // 同类排名
+}
+
+// [WHAT] 饼图颜色列表
+const CHART_COLORS = [
+  '#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6',
+  '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1'
+]
+
+/**
+ * 获取基金行业配置
+ * [WHY] 展示基金持仓的行业分布
+ * [DEPS] pingzhongdata 接口返回 Data_IndustryAllocation
+ */
+export async function fetchIndustryAllocation(code: string): Promise<IndustryAllocation[]> {
+  const cacheKey = `industry_${code}`
+  const cached = cache.get<IndustryAllocation[]>(cacheKey)
+  if (cached) return cached
+  
+  return new Promise((resolve) => {
+    const scriptId = `industry_${code}_${Date.now()}`
+    const timeout = setTimeout(() => { cleanup(); resolve([]) }, 10000)
+    
+    const script = document.createElement('script')
+    script.id = scriptId
+    script.src = `https://fund.eastmoney.com/pingzhongdata/${code}.js?v=${Date.now()}`
+    
+    script.onload = () => {
+      cleanup()
+      try {
+        // [WHAT] Data_IndustryAllocation 格式: { series: [{ data: [{name, y}] }] }
+        const data = (window as any).Data_IndustryAllocation
+        if (!data?.series?.[0]?.data) {
+          resolve([])
+          return
+        }
+        
+        const industries: IndustryAllocation[] = data.series[0].data
+          .filter((item: any) => item.y > 0)
+          .slice(0, 10)
+          .map((item: any, idx: number) => ({
+            name: item.name || '其他',
+            ratio: parseFloat(item.y?.toFixed(2)) || 0,
+            color: CHART_COLORS[idx % CHART_COLORS.length]
+          }))
+        
+        cache.set(cacheKey, industries, CACHE_TTL.FUND_INFO)
+        resolve(industries)
+      } catch {
+        resolve([])
+      }
+    }
+    
+    script.onerror = () => { cleanup(); resolve([]) }
+    
+    function cleanup() {
+      clearTimeout(timeout)
+      const s = document.getElementById(scriptId)
+      if (s) document.body.removeChild(s)
+    }
+    
+    document.body.appendChild(script)
+  })
+}
+
+/**
+ * 获取基金资产配置
+ * [WHY] 展示股票/债券/现金比例
+ */
+export async function fetchAssetAllocation(code: string): Promise<AssetAllocation | null> {
+  const cacheKey = `asset_${code}`
+  const cached = cache.get<AssetAllocation>(cacheKey)
+  if (cached) return cached
+  
+  return new Promise((resolve) => {
+    const scriptId = `asset_${code}_${Date.now()}`
+    const timeout = setTimeout(() => { cleanup(); resolve(null) }, 10000)
+    
+    const script = document.createElement('script')
+    script.id = scriptId
+    script.src = `https://fund.eastmoney.com/pingzhongdata/${code}.js?v=${Date.now()}`
+    
+    script.onload = () => {
+      cleanup()
+      try {
+        // [WHAT] Data_assetAllocation 格式: { series: [{name, data:[...]}, ...] }
+        const data = (window as any).Data_assetAllocation
+        if (!data?.series) {
+          resolve(null)
+          return
+        }
+        
+        // [WHAT] 提取最新一期的配置（data数组最后一个元素）
+        const getSeries = (name: string) => {
+          const s = data.series.find((item: any) => item.name === name)
+          if (!s?.data?.length) return 0
+          return s.data[s.data.length - 1] || 0
+        }
+        
+        const asset: AssetAllocation = {
+          stock: parseFloat(getSeries('股票占净比').toFixed(2)),
+          bond: parseFloat(getSeries('债券占净比').toFixed(2)),
+          cash: parseFloat(getSeries('现金占净比').toFixed(2)),
+          other: parseFloat(getSeries('其他占净比').toFixed(2))
+        }
+        
+        cache.set(cacheKey, asset, CACHE_TTL.FUND_INFO)
+        resolve(asset)
+      } catch {
+        resolve(null)
+      }
+    }
+    
+    script.onerror = () => { cleanup(); resolve(null) }
+    
+    function cleanup() {
+      clearTimeout(timeout)
+      const s = document.getElementById(scriptId)
+      if (s) document.body.removeChild(s)
+    }
+    
+    document.body.appendChild(script)
+  })
+}
+
+/**
+ * 获取基金评级和风险指标
+ * [WHY] 帮助用户评估基金质量和风险
+ */
+export async function fetchFundRating(code: string): Promise<FundRating | null> {
+  const cacheKey = `rating_${code}`
+  const cached = cache.get<FundRating>(cacheKey)
+  if (cached) return cached
+  
+  return new Promise((resolve) => {
+    const scriptId = `rating_${code}_${Date.now()}`
+    const timeout = setTimeout(() => { cleanup(); resolve(null) }, 10000)
+    
+    const script = document.createElement('script')
+    script.id = scriptId
+    script.src = `https://fund.eastmoney.com/pingzhongdata/${code}.js?v=${Date.now()}`
+    
+    script.onload = () => {
+      cleanup()
+      try {
+        // [WHAT] 从多个全局变量提取评级数据
+        const rateInSimilar = (window as any).Data_rateInSimilarType || []
+        const performanceData = (window as any).Data_rateInSimilarPers498 || []
+        const fluctuation = (window as any).Data_fluctuationScale || {}
+        
+        // [WHAT] 计算综合评级（基于同类排名）
+        let rating = 3
+        if (rateInSimilar.length > 0) {
+          const latestRank = rateInSimilar[rateInSimilar.length - 1]
+          if (latestRank) {
+            // [HOW] 排名百分比转评级：前20%=5星，前40%=4星...
+            const rankPercent = (latestRank.rank / latestRank.total) * 100
+            if (rankPercent <= 20) rating = 5
+            else if (rankPercent <= 40) rating = 4
+            else if (rankPercent <= 60) rating = 3
+            else if (rankPercent <= 80) rating = 2
+            else rating = 1
+          }
+        }
+        
+        // [WHAT] 提取风险指标
+        let sharpeRatio = 0, maxDrawdown = 0, volatility = 0
+        if (fluctuation?.series) {
+          // 夏普比率
+          const sharpe = fluctuation.series.find((s: any) => s.name?.includes('夏普'))
+          if (sharpe?.data?.length) sharpeRatio = sharpe.data[sharpe.data.length - 1] || 0
+          
+          // 波动率
+          const vol = fluctuation.series.find((s: any) => s.name?.includes('标准差') || s.name?.includes('波动'))
+          if (vol?.data?.length) volatility = vol.data[vol.data.length - 1] || 0
+        }
+        
+        // [WHAT] 从业绩数据提取最大回撤
+        if (performanceData.length > 0) {
+          const values = performanceData.map((d: any) => d.y || d)
+          const max = Math.max(...values)
+          const min = Math.min(...values)
+          maxDrawdown = max > 0 ? ((max - min) / max) * 100 : 0
+        }
+        
+        // [WHAT] 风险等级判断
+        let riskLevel = '中风险'
+        if (volatility < 10) riskLevel = '低风险'
+        else if (volatility < 20) riskLevel = '中低风险'
+        else if (volatility < 30) riskLevel = '中风险'
+        else if (volatility < 40) riskLevel = '中高风险'
+        else riskLevel = '高风险'
+        
+        // [WHAT] 同类排名
+        let rankInSimilar = '--'
+        if (rateInSimilar.length > 0) {
+          const latest = rateInSimilar[rateInSimilar.length - 1]
+          // [EDGE] 确保 rank 和 total 都存在且有效
+          if (latest && latest.rank !== undefined && latest.total !== undefined) {
+            rankInSimilar = `${latest.rank}/${latest.total}`
+          }
+        }
+        
+        const result: FundRating = {
+          rating,
+          riskLevel,
+          sharpeRatio: parseFloat(sharpeRatio.toFixed(2)),
+          maxDrawdown: parseFloat(maxDrawdown.toFixed(2)),
+          volatility: parseFloat(volatility.toFixed(2)),
+          rankInSimilar
+        }
+        
+        cache.set(cacheKey, result, CACHE_TTL.FUND_INFO)
+        resolve(result)
+      } catch {
+        resolve(null)
+      }
+    }
+    
+    script.onerror = () => { cleanup(); resolve(null) }
     
     function cleanup() {
       clearTimeout(timeout)

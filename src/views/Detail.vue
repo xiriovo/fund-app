@@ -8,7 +8,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { useFundStore } from '@/stores/fund'
 import { useHoldingStore } from '@/stores/holding'
 import { fetchStockHoldings, detectShareClass } from '@/api/fund'
-import { fetchFundEstimateFast } from '@/api/fundFast'
+import { 
+  fetchFundEstimateFast, fetchIndustryAllocation, fetchAssetAllocation, fetchFundRating,
+  type IndustryAllocation, type AssetAllocation, type FundRating
+} from '@/api/fundFast'
 import { 
   fetchPeriodReturnExt, fetchSimilarFunds, fetchSectorFunds, 
   fetchDividendRecords, fetchFundFees, fetchFundAnnouncements, fetchFundScale,
@@ -42,6 +45,11 @@ const dividendRecords = ref<DividendRecord[]>([])
 const fundFees = ref<FundFeeInfo | null>(null)
 const announcements = ref<FundAnnouncement[]>([])
 const fundScale = ref<FundScale | null>(null)
+
+// [WHAT] 行业配置和评级数据
+const industryAllocation = ref<IndustryAllocation[]>([])
+const assetAllocation = ref<AssetAllocation | null>(null)
+const fundRating = ref<FundRating | null>(null)
 
 // [WHAT] 实时刷新
 let refreshTimer: ReturnType<typeof setInterval> | null = null
@@ -199,6 +207,11 @@ async function loadFundData() {
     fetchSimilarFunds(fundCode.value).then(f => similarFunds.value = f).catch(() => {})
     fetchSectorFunds().then(s => { if (s.length > 0) sectorInfo.value = s[0]! }).catch(() => {})
     
+    // [WHAT] 加载行业配置和评级数据
+    fetchIndustryAllocation(fundCode.value).then(i => industryAllocation.value = i).catch(() => {})
+    fetchAssetAllocation(fundCode.value).then(a => assetAllocation.value = a).catch(() => {})
+    fetchFundRating(fundCode.value).then(r => fundRating.value = r).catch(() => {})
+    
     // [WHAT] 加载核心功能数据：分红、费率、公告、规模
     fetchDividendRecords(fundCode.value).then(d => dividendRecords.value = d).catch(() => {})
     fetchFundFees(fundCode.value).then(f => fundFees.value = f).catch(() => {})
@@ -337,6 +350,30 @@ const estimatedRedemptionFee = computed(() => {
 // [WHAT] 分红累计金额
 const totalDividend = computed(() => {
   return dividendRecords.value.reduce((sum, r) => sum + r.amount, 0)
+})
+
+// [WHAT] 行业配置饼图数据
+// [HOW] 将占比转换为 SVG stroke-dasharray 和 offset
+const industryPieData = computed(() => {
+  const total = industryAllocation.value.reduce((sum, i) => sum + i.ratio, 0)
+  if (total === 0) return []
+  
+  const circumference = 2 * Math.PI * 40 // 圆周长 = 2πr
+  let accumulatedOffset = 0
+  
+  return industryAllocation.value.map(item => {
+    const ratio = item.ratio / total
+    const dashLength = circumference * ratio
+    const dashArray = `${dashLength} ${circumference - dashLength}`
+    const offset = -accumulatedOffset
+    accumulatedOffset += dashLength
+    
+    return {
+      ...item,
+      dashArray,
+      offset
+    }
+  })
 })
 
 // [WHAT] 打开公告链接
@@ -714,6 +751,145 @@ function formatPercent(num: number): string {
         </div>
         <div class="estimate-fee">
           预估赎回费: <span class="fee-amount">¥{{ estimatedRedemptionFee.fee.toFixed(2) }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 重仓股票 ========== -->
+    <div class="info-section">
+      <div class="section-header">
+        <span>重仓股票</span>
+        <span class="section-tip" v-if="stockHoldings.length > 0">
+          TOP{{ stockHoldings.length }}
+        </span>
+      </div>
+      <div v-if="stockHoldings.length > 0" class="holdings-list">
+        <div 
+          v-for="(stock, idx) in stockHoldings" 
+          :key="idx"
+          class="holding-item"
+        >
+          <div class="holding-rank">{{ idx + 1 }}</div>
+          <div class="holding-info">
+            <div class="holding-name">{{ stock.stockName }}</div>
+            <div class="holding-code">{{ stock.stockCode }}</div>
+          </div>
+          <div class="holding-ratio">
+            <div class="ratio-value">{{ stock.holdingRatio.toFixed(2) }}%</div>
+            <div class="ratio-label">持仓占比</div>
+          </div>
+        </div>
+      </div>
+      <div v-else class="empty-hint">暂无持仓数据</div>
+    </div>
+
+    <!-- ========== 行业配置 ========== -->
+    <div class="info-section" v-if="industryAllocation.length > 0">
+      <div class="section-header">
+        <span>行业配置</span>
+      </div>
+      <div class="industry-chart">
+        <!-- 简易饼图（使用CSS实现） -->
+        <div class="pie-container">
+          <svg viewBox="0 0 100 100" class="pie-svg">
+            <circle 
+              v-for="(item, idx) in industryPieData" 
+              :key="idx"
+              cx="50" cy="50" r="40"
+              fill="transparent"
+              :stroke="item.color"
+              stroke-width="20"
+              :stroke-dasharray="item.dashArray"
+              :stroke-dashoffset="item.offset"
+              :style="{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%' }"
+            />
+          </svg>
+        </div>
+        <div class="industry-legend">
+          <div 
+            v-for="item in industryAllocation.slice(0, 6)" 
+            :key="item.name"
+            class="legend-item"
+          >
+            <span class="legend-color" :style="{ background: item.color }"></span>
+            <span class="legend-name">{{ item.name }}</span>
+            <span class="legend-value">{{ item.ratio }}%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 资产配置 ========== -->
+    <div class="info-section" v-if="assetAllocation">
+      <div class="section-header">
+        <span>资产配置</span>
+      </div>
+      <div class="asset-bars">
+        <div class="asset-item" v-if="assetAllocation.stock > 0">
+          <span class="asset-label">股票</span>
+          <div class="asset-bar">
+            <div class="bar-fill stock" :style="{ width: assetAllocation.stock + '%' }"></div>
+          </div>
+          <span class="asset-value">{{ assetAllocation.stock }}%</span>
+        </div>
+        <div class="asset-item" v-if="assetAllocation.bond > 0">
+          <span class="asset-label">债券</span>
+          <div class="asset-bar">
+            <div class="bar-fill bond" :style="{ width: assetAllocation.bond + '%' }"></div>
+          </div>
+          <span class="asset-value">{{ assetAllocation.bond }}%</span>
+        </div>
+        <div class="asset-item" v-if="assetAllocation.cash > 0">
+          <span class="asset-label">现金</span>
+          <div class="asset-bar">
+            <div class="bar-fill cash" :style="{ width: assetAllocation.cash + '%' }"></div>
+          </div>
+          <span class="asset-value">{{ assetAllocation.cash }}%</span>
+        </div>
+        <div class="asset-item" v-if="assetAllocation.other > 0">
+          <span class="asset-label">其他</span>
+          <div class="asset-bar">
+            <div class="bar-fill other" :style="{ width: assetAllocation.other + '%' }"></div>
+          </div>
+          <span class="asset-value">{{ assetAllocation.other }}%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 基金评级 ========== -->
+    <div class="info-section" v-if="fundRating">
+      <div class="section-header">
+        <span>基金评级</span>
+        <span class="section-tip">{{ fundRating.riskLevel }}</span>
+      </div>
+      <div class="rating-content">
+        <div class="rating-stars">
+          <van-icon 
+            v-for="i in 5" 
+            :key="i" 
+            :name="i <= fundRating.rating ? 'star' : 'star-o'" 
+            :color="i <= fundRating.rating ? '#f59e0b' : '#d1d5db'"
+            size="20"
+          />
+          <span class="rating-text">{{ fundRating.rating }}星</span>
+        </div>
+        <div class="rating-metrics">
+          <div class="metric-item">
+            <div class="metric-value">{{ fundRating.sharpeRatio || '--' }}</div>
+            <div class="metric-label">夏普比率</div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-value danger">{{ fundRating.maxDrawdown ? fundRating.maxDrawdown + '%' : '--' }}</div>
+            <div class="metric-label">最大回撤</div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-value">{{ fundRating.volatility ? fundRating.volatility + '%' : '--' }}</div>
+            <div class="metric-label">波动率</div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-value primary">{{ fundRating.rankInSimilar }}</div>
+            <div class="metric-label">同类排名</div>
+          </div>
         </div>
       </div>
     </div>
@@ -1382,6 +1558,241 @@ function formatPercent(num: number): string {
 .fee-amount {
   font-weight: 600;
   color: #f56c6c;
+}
+
+/* ========== 重仓股票 ========== */
+.holdings-list {
+  padding: 8px 16px 12px;
+}
+
+.holding-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.holding-item:last-child {
+  border-bottom: none;
+}
+
+.holding-rank {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+}
+
+.holding-item:nth-child(1) .holding-rank {
+  background: #ff6b6b;
+  color: white;
+}
+
+.holding-item:nth-child(2) .holding-rank {
+  background: #ffa726;
+  color: white;
+}
+
+.holding-item:nth-child(3) .holding-rank {
+  background: #ffca28;
+  color: white;
+}
+
+.holding-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.holding-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.holding-code {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.holding-ratio {
+  text-align: right;
+}
+
+.ratio-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.ratio-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* ========== 行业配置 ========== */
+.industry-chart {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  gap: 20px;
+}
+
+.pie-container {
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+}
+
+.pie-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.industry-legend {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.legend-name {
+  flex: 1;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legend-value {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+/* ========== 资产配置 ========== */
+.asset-bars {
+  padding: 12px 16px;
+}
+
+.asset-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.asset-item:last-child {
+  margin-bottom: 0;
+}
+
+.asset-label {
+  width: 36px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.asset-bar {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-primary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+
+.bar-fill.stock { background: #3b82f6; }
+.bar-fill.bond { background: #22c55e; }
+.bar-fill.cash { background: #f59e0b; }
+.bar-fill.other { background: #8b5cf6; }
+
+.asset-value {
+  width: 45px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+/* ========== 基金评级 ========== */
+.rating-content {
+  padding: 16px;
+}
+
+.rating-stars {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.rating-text {
+  margin-left: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #f59e0b;
+}
+
+.rating-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.metric-item {
+  text-align: center;
+  padding: 12px 4px;
+  background: var(--bg-primary);
+  border-radius: 8px;
+}
+
+.metric-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.metric-value.danger {
+  color: var(--color-down);
+}
+
+.metric-value.primary {
+  color: var(--color-primary);
+}
+
+.metric-label {
+  font-size: 10px;
+  color: var(--text-secondary);
 }
 
 /* ========== 分红记录 ========== */

@@ -6,7 +6,7 @@ import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useFundStore } from '@/stores/fund'
 import { useAlertStore, ALERT_TYPE_CONFIG, type AlertType } from '@/stores/alert'
-import { fetchMarketIndicesFast, type MarketIndexSimple } from '@/api/fundFast'
+import { fetchMarketIndicesFast, fetchGlobalIndices, type MarketIndexSimple, type GlobalIndex } from '@/api/fundFast'
 import { fetchFinanceNews, type NewsItem } from '@/api/tiantianApi'
 import { 
   fetchRemoteConfig, 
@@ -30,6 +30,10 @@ let hasLoadedRemoteConfig = false
 
 // [WHAT] 大盘指数
 const indices = ref<MarketIndexSimple[]>([])
+
+// [WHAT] 全球指数
+const globalIndices = ref<GlobalIndex[]>([])
+const showGlobalIndices = ref(false)
 
 // [WHAT] 公告列表（默认 + 远程）
 const defaultNotices = [
@@ -62,8 +66,9 @@ onMounted(async () => {
   fundStore.initWatchlist()
   // 请求通知权限
   await alertStore.requestNotificationPermission()
-  // 加载大盘指数和资讯
+  // 加载大盘指数、全球指数和资讯
   loadIndices()
+  loadGlobalIndices()
   loadNews()
   // 加载远程配置
   loadRemoteConfig()
@@ -148,6 +153,15 @@ async function loadIndices() {
   }
 }
 
+// [WHAT] 加载全球指数
+async function loadGlobalIndices() {
+  try {
+    globalIndices.value = await fetchGlobalIndices()
+  } catch {
+    // 静默失败
+  }
+}
+
 // [WHAT] 加载财经资讯
 async function loadNews() {
   newsLoading.value = true
@@ -182,6 +196,7 @@ async function onRefresh() {
   await Promise.all([
     fundStore.refreshEstimates(),
     loadIndices(),
+    loadGlobalIndices(),
     loadNews()
   ])
   showToast('刷新成功')
@@ -280,6 +295,7 @@ function submitAlert() {
         <span>搜索基金代码/名称</span>
       </div>
       <div class="header-right">
+        <van-icon name="bullhorn-o" size="22" @click="router.push('/announcement')" />
         <van-icon name="setting-o" size="22" @click="router.push('/alerts')" />
       </div>
     </div>
@@ -367,6 +383,39 @@ function submitAlert() {
               {{ index.change >= 0 ? '+' : '' }}{{ index.change.toFixed(2) }}%
             </div>
           </div>
+        </div>
+      </div>
+      
+      <!-- 全球指数 -->
+      <div class="global-indices" v-if="globalIndices.length > 0">
+        <div class="section-header" @click="showGlobalIndices = !showGlobalIndices">
+          <span>全球指数</span>
+          <van-icon :name="showGlobalIndices ? 'arrow-up' : 'arrow-down'" size="14" />
+        </div>
+        <div class="global-grid" v-show="showGlobalIndices">
+          <div 
+            v-for="idx in globalIndices" 
+            :key="idx.code" 
+            class="global-item"
+            :class="idx.changePercent >= 0 ? 'up' : 'down'"
+          >
+            <div class="global-name">
+              <span class="region-tag" :class="idx.region">{{ 
+                idx.region === 'cn' ? '中' : 
+                idx.region === 'hk' ? '港' : 
+                idx.region === 'us' ? '美' : 
+                idx.region === 'eu' ? '欧' : '亚' 
+              }}</span>
+              {{ idx.name }}
+            </div>
+            <div class="global-price">{{ idx.price > 1000 ? idx.price.toFixed(0) : idx.price.toFixed(2) }}</div>
+            <div class="global-change">
+              {{ idx.changePercent >= 0 ? '+' : '' }}{{ idx.changePercent.toFixed(2) }}%
+            </div>
+          </div>
+        </div>
+        <div class="expand-hint" v-show="!showGlobalIndices" @click="showGlobalIndices = true">
+          点击展开查看全球指数行情
         </div>
       </div>
       
@@ -645,6 +694,9 @@ function submitAlert() {
 }
 
 .header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   flex-shrink: 0;
   color: var(--text-primary);
 }
@@ -745,6 +797,98 @@ function submitAlert() {
 .index-item.down .index-value,
 .index-item.down .index-change {
   color: var(--color-down);
+}
+
+/* 全球指数 */
+.global-indices {
+  padding: 12px;
+  background: var(--bg-secondary);
+  margin: 8px 12px;
+  border-radius: 12px;
+}
+
+.global-indices .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.global-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.global-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--bg-primary);
+  border-radius: 8px;
+}
+
+.global-name {
+  font-size: 12px;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.region-tag {
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.region-tag.cn { background: #fee2e2; color: #dc2626; }
+.region-tag.hk { background: #fef3c7; color: #d97706; }
+.region-tag.us { background: #dbeafe; color: #2563eb; }
+.region-tag.eu { background: #e0e7ff; color: #4f46e5; }
+.region-tag.asia { background: #d1fae5; color: #059669; }
+
+.global-price {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 8px;
+}
+
+.global-change {
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 55px;
+  text-align: right;
+}
+
+.global-item.up .global-price,
+.global-item.up .global-change {
+  color: var(--color-up);
+}
+
+.global-item.down .global-price,
+.global-item.down .global-change {
+  color: var(--color-down);
+}
+
+.expand-hint {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 10px 0 4px;
+  cursor: pointer;
 }
 
 /* 快捷入口 */

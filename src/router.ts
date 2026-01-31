@@ -107,6 +107,12 @@ const router = createRouter({
       name: 'calendar',
       component: () => import('@/views/Calendar.vue'),
       meta: { title: '投资日历' }
+    },
+    {
+      path: '/announcement',
+      name: 'announcement',
+      component: () => import('@/views/Announcement.vue'),
+      meta: { title: '公告中心' }
     }
   ]
 })
