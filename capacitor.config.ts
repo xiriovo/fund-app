@@ -19,6 +19,10 @@ const config: CapacitorConfig = {
   android: {
     // [WHAT] 允许混合内容（HTTP + HTTPS）
     allowMixedContent: true
+  },
+  ios: {
+    // [WHAT] 允许混合内容（HTTP + HTTPS）
+    allowMixedContent: true
   }
 }
 

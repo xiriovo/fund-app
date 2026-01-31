@@ -37,3 +37,15 @@ android/*.iml
 
 # Capacitor
 capacitor.config.json
+
+# iOS build files
+ios/App/build/
+ios/App/Pods/
+ios/App/*.xcworkspace
+ios/App/App.xcodeproj/xcuserdata/
+ios/App/DerivedData/
+*.app
+*.ipa
+
+# iOS CocoaPods
+Podfile.lock

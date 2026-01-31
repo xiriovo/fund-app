@@ -1,10 +1,11 @@
 # 基金宝
 
-一款开源的基金实时估值查看工具，专为 Android 平台打造。
+一款开源的基金实时估值查看工具，支持 Android 和 iOS 平台。
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Vue](https://img.shields.io/badge/Vue-3.x-brightgreen.svg)
 ![Capacitor](https://img.shields.io/badge/Capacitor-7.x-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Android%20%7C%20iOS-lightgrey.svg)
 
 ## 功能特点
 
@@ -29,7 +30,9 @@
 
 ### 下载安装
 
-前往 [Releases](https://github.com/xiriovo/fund-app/releases) 下载最新版 APK 安装。
+前往 [Releases](https://github.com/xiriovo/fund-app/releases) 下载最新版本：
+- Android: 下载 APK 安装
+- iOS: 下载 IPA 安装（需要签名）
 
 ### 本地开发
 
@@ -64,6 +67,22 @@ cd android
 
 APK 输出位置：`android/app/build/outputs/apk/debug/app-debug.apk`
 
+### iOS App 构建
+
+```bash
+# 同步 Capacitor
+npm run cap:sync
+
+# 使用 Xcode 打开
+npx cap open ios
+```
+
+在 Xcode 中：
+1. 选择目标设备或模拟器
+2. 点击 "Run" 按钮或按 Cmd+R 构建
+
+IPA 输出位置：通过 Xcode 菜单 `Product > Archive` 导出
+
 ## 技术栈
 
 - **前端框架**：Vue 3 + TypeScript
@@ -71,7 +90,7 @@ APK 输出位置：`android/app/build/outputs/apk/debug/app-debug.apk`
 - **UI 组件**：Vant 4
 - **状态管理**：Pinia
 - **图表绘制**：Canvas API + lightweight-charts
-- **移动打包**：Capacitor
+- **移动打包**：Capacitor（支持 Android 和 iOS）
 
 ## 数据来源
 

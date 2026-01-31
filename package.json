@@ -10,13 +10,17 @@
     "update-funds": "node scripts/fetch-fund-list.mjs",
     "cap:init": "npx cap init",
     "cap:add:android": "npx cap add android",
+    "cap:add:ios": "npx cap add ios",
     "cap:sync": "npm run build && npx cap sync",
-    "cap:open:android": "npx cap open android"
+    "cap:open:android": "npx cap open android",
+    "cap:open:ios": "npx cap open ios",
+    "ios:build": "cd ios/App && xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,id=560E75D5-9930-45E1-B47F-540B49D1C37D' build"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.5",
     "@capacitor/app": "^7.1.1",
     "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.4.5",
     "@vant/use": "^1.6.0",
     "lightweight-charts": "^5.1.0",
     "pinia": "^3.0.0",
