@@ -72,23 +72,40 @@ const filteredData = computed(() => {
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   
-  // [WHY] 当日模式：只显示历史数据（昨日及之前），不使用估值
-  // [NOTE] 等开盘后有真实净值数据才会显示今日
+  // [WHY] 当日模式：显示今日数据 + 实时估值
   if (showIntradayChart.value) {
-    // [WHAT] 取最近5天的历史数据
-    const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000)
-    const data = chartData.value
-      .filter(item => new Date(item.time) >= fiveDaysAgo)
+    // [WHAT] 获取最近两天的数据（昨日 + 今日）
+    const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)
+    let data = chartData.value
+      .filter(item => new Date(item.time) >= twoDaysAgo)
       .map((item, i) => ({ 
         ...item, 
         volume: 50 + Math.abs(item.change) * 30 + (i % 5) * 10
       }))
     
+    // [WHAT] 如果有实时估值且今天没有数据，添加今日数据点
+    const hasTodayData = data.some(d => d.time === today)
+    if (!hasTodayData && props.realtimeValue > 0) {
+      data = [...data, {
+        time: today,
+        value: props.realtimeValue,
+        change: props.realtimeChange,
+        volume: 100
+      }]
+    } else if (hasTodayData && props.realtimeValue > 0) {
+      // [WHAT] 更新今日数据为实时值
+      data = data.map(d => d.time === today ? {
+        ...d,
+        value: props.realtimeValue,
+        change: props.realtimeChange
+      } : d)
+    }
+    
     // [EDGE] 如果没有数据，返回占位数据
     if (data.length === 0) {
       return [{
         time: today,
-        value: props.lastClose || 1,
+        value: props.lastClose || props.realtimeValue || 1,
         change: 0,
         volume: 50
       }]
