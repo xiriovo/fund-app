@@ -699,11 +699,13 @@ function submitAlert() {
 
 .index-item {
   text-align: center;
-  padding: 12px 6px;
+  padding: 12px 4px;
   background: linear-gradient(145deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
   border-radius: 12px;
   border: 1px solid var(--border-color);
   transition: transform 0.2s, box-shadow 0.2s;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .index-item:active {
@@ -726,7 +728,10 @@ function submitAlert() {
 }
 
 .index-change {
-  font-size: 12px;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .index-item.up .index-value,
