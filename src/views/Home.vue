@@ -368,7 +368,7 @@ function submitAlert() {
         </div>
         <div class="action-item" @click="router.push('/calculator')">
           <div class="action-icon">
-            <van-icon name="calculator-o" size="22" />
+            <van-icon name="gold-coin-o" size="22" />
           </div>
           <span>定投</span>
         </div>
@@ -398,7 +398,7 @@ function submitAlert() {
         </div>
         <div class="action-item" @click="router.push('/alerts')">
           <div class="action-icon">
-            <van-icon name="bell-o" size="22" />
+            <van-icon name="bell" size="22" />
           </div>
           <span>提醒</span>
         </div>
