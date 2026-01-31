@@ -33,6 +33,11 @@ const newAlert = ref({
   threshold: 3
 })
 
+// [WHAT] 基金搜索相关
+const searchKeyword = ref('')
+const searchResults = ref<{ code: string, name: string }[]>([])
+const isSearching = ref(false)
+
 onMounted(() => {
   loadAlerts()
 })
@@ -134,8 +139,34 @@ function goBack() {
   router.back()
 }
 
-function goToSearch() {
-  router.push('/search')
+// [WHAT] 搜索基金
+async function searchFunds() {
+  if (!searchKeyword.value.trim()) {
+    searchResults.value = []
+    return
+  }
+  
+  isSearching.value = true
+  try {
+    const { searchFund } = await import('@/api/fund')
+    const results = await searchFund(searchKeyword.value)
+    searchResults.value = results.slice(0, 10).map(f => ({
+      code: f.code,
+      name: f.name
+    }))
+  } catch {
+    searchResults.value = []
+  } finally {
+    isSearching.value = false
+  }
+}
+
+// [WHAT] 选择搜索结果中的基金
+function selectSearchResult(fund: { code: string, name: string }) {
+  newAlert.value.code = fund.code
+  newAlert.value.name = fund.name
+  searchKeyword.value = ''
+  searchResults.value = []
 }
 </script>
 
@@ -199,13 +230,39 @@ function goToSearch() {
     <!-- 添加提醒弹窗 -->
     <van-action-sheet v-model:show="showAddSheet" title="添加提醒">
       <div class="add-form">
-        <!-- 选择基金 -->
-        <van-cell 
-          title="选择基金" 
-          :value="newAlert.name || '请选择'"
-          is-link
-          @click="goToSearch"
-        />
+        <!-- 搜索选择基金 -->
+        <div class="fund-select">
+          <van-field
+            v-model="searchKeyword"
+            placeholder="搜索基金代码或名称"
+            clearable
+            @update:model-value="searchFunds"
+          >
+            <template #left-icon>
+              <van-icon name="search" />
+            </template>
+          </van-field>
+          
+          <!-- 已选基金 -->
+          <div v-if="newAlert.code" class="selected-fund">
+            <span class="fund-name">{{ newAlert.name }}</span>
+            <span class="fund-code">{{ newAlert.code }}</span>
+            <van-icon name="cross" @click="newAlert.code = ''; newAlert.name = ''" />
+          </div>
+          
+          <!-- 搜索结果 -->
+          <div v-if="searchResults.length > 0" class="search-results">
+            <div 
+              v-for="fund in searchResults" 
+              :key="fund.code"
+              class="result-item"
+              @click="selectSearchResult(fund)"
+            >
+              <span class="fund-name">{{ fund.name }}</span>
+              <span class="fund-code">{{ fund.code }}</span>
+            </div>
+          </div>
+        </div>
         
         <!-- 提醒类型 -->
         <div class="type-selector">
@@ -317,6 +374,66 @@ function goToSearch() {
 /* 添加表单 */
 .add-form {
   padding: 16px;
+}
+
+/* 基金搜索选择 */
+.fund-select {
+  margin-bottom: 16px;
+}
+
+.selected-fund {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+.selected-fund .fund-name {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.selected-fund .fund-code {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.search-results {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+.result-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+}
+
+.result-item:last-child {
+  border-bottom: none;
+}
+
+.result-item:active {
+  background: var(--bg-tertiary);
+}
+
+.result-item .fund-name {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.result-item .fund-code {
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .type-selector {
