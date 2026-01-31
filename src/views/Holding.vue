@@ -164,8 +164,21 @@ async function selectFund(fund: FundInfo) {
     closeToast()
   } catch {
     closeToast()
+    // [WHY] 估值API失败时（ETF联接等），尝试从历史净值获取
+    try {
+      const { fetchSimpleKLineData } = await import('@/api/fundFast')
+      const klineData = await fetchSimpleKLineData(fund.code, '1m')
+      if (klineData && klineData.length > 0) {
+        // [WHAT] 使用最新的历史净值
+        currentNetValue.value = klineData[klineData.length - 1]!.value
+        showToast('已获取历史净值')
+        return
+      }
+    } catch {
+      // 历史数据也失败
+    }
     currentNetValue.value = 1
-    showToast('无法获取净值，请手动计算')
+    showToast('请手动输入净值')
   }
 }
 
