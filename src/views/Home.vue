@@ -341,12 +341,12 @@ function submitAlert() {
             v-for="index in indices" 
             :key="index.code" 
             class="index-item"
-            :class="index.change >= 0 ? 'up' : 'down'"
+            :class="index.changePercent >= 0 ? 'up' : 'down'"
           >
             <div class="index-name">{{ index.name }}</div>
             <div class="index-value">{{ index.current.toFixed(2) }}</div>
             <div class="index-change">
-              {{ index.change >= 0 ? '+' : '' }}{{ index.change.toFixed(2) }}%
+              {{ index.change >= 0 ? '+' : '' }}{{ index.change.toFixed(2) }}  {{ index.changePercent >= 0 ? '+' : '' }}{{ index.changePercent.toFixed(2) }}%
             </div>
           </div>
         </div>
@@ -720,13 +720,14 @@ function submitAlert() {
 }
 
 .index-value {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   margin-bottom: 2px;
+  white-space: nowrap;
 }
 
 .index-change {
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .index-item.up .index-value,
