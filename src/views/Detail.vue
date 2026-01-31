@@ -37,6 +37,9 @@ let refreshTimer: ReturnType<typeof setInterval> | null = null
 // [WHAT] Tab切换
 const activeTab = ref<'chart' | 'performance' | 'profit'>('chart')
 
+// [WHAT] 持仓面板展开状态
+const holdingExpanded = ref(true)
+
 // [WHAT] 看涨/看跌投票
 const bullCount = ref(41080)
 const bearCount = ref(15942)
@@ -381,56 +384,80 @@ function formatPercent(num: number): string {
     </div>
 
     <!-- 持仓数据区（仅持有时显示） -->
-    <div v-if="holdingDetails" class="holding-panel">
-      <div class="holding-grid">
-        <div class="holding-item">
-          <div class="item-label">持有金额</div>
-          <div class="item-value">{{ formatNum(holdingDetails.amount) }}</div>
+    <div v-if="holdingDetails" class="holding-panel" :class="{ collapsed: !holdingExpanded }">
+      <!-- 简要信息（始终显示） -->
+      <div class="holding-summary" @click="holdingExpanded = !holdingExpanded">
+        <div class="summary-item">
+          <span class="summary-label">持有金额</span>
+          <span class="summary-value">{{ formatNum(holdingDetails.amount) }}</span>
         </div>
-        <div class="holding-item">
-          <div class="item-label">持有份额</div>
-          <div class="item-value">{{ formatNum(holdingDetails.shares) }}</div>
-        </div>
-        <div class="holding-item">
-          <div class="item-label">持仓占比</div>
-          <div class="item-value">{{ holdingDetails.ratio.toFixed(2) }}%</div>
-        </div>
-        <div class="holding-item">
-          <div class="item-label">持有收益</div>
-          <div class="item-value" :class="holdingDetails.profit >= 0 ? 'up' : 'down'">
+        <div class="summary-item">
+          <span class="summary-label">持有收益</span>
+          <span class="summary-value" :class="holdingDetails.profit >= 0 ? 'up' : 'down'">
             {{ formatNum(holdingDetails.profit) }}
-          </div>
+          </span>
         </div>
-        <div class="holding-item">
-          <div class="item-label">持有收益率</div>
-          <div class="item-value" :class="holdingDetails.profitRate >= 0 ? 'up' : 'down'">
+        <div class="summary-item">
+          <span class="summary-label">收益率</span>
+          <span class="summary-value" :class="holdingDetails.profitRate >= 0 ? 'up' : 'down'">
             {{ formatPercent(holdingDetails.profitRate) }}
-          </div>
+          </span>
         </div>
-        <div class="holding-item">
-          <div class="item-label">持仓成本</div>
-          <div class="item-value">{{ holdingDetails.cost.toFixed(4) }}</div>
-        </div>
-        <div class="holding-item">
-          <div class="item-label">当日收益</div>
-          <div class="item-value" :class="holdingDetails.todayProfit >= 0 ? 'up' : 'down'">
-            {{ formatNum(holdingDetails.todayProfit) }}
-          </div>
-        </div>
-        <div class="holding-item">
-          <div class="item-label">昨日收益</div>
-          <div class="item-value" :class="holdingDetails.yesterdayProfit >= 0 ? 'up' : 'down'">
-            {{ formatNum(holdingDetails.yesterdayProfit) }}
-          </div>
-        </div>
-        <div class="holding-item">
-          <div class="item-label">持有天数</div>
-          <div class="item-value">{{ holdingDetails.holdDays }}</div>
-        </div>
+        <van-icon 
+          :name="holdingExpanded ? 'arrow-up' : 'arrow-down'" 
+          class="expand-icon"
+        />
       </div>
-      <div class="holding-collapse">
-        <van-icon name="arrow-up" />
-      </div>
+      
+      <!-- 详细信息（展开时显示） -->
+      <transition name="slide">
+        <div v-show="holdingExpanded" class="holding-grid">
+          <div class="holding-item">
+            <div class="item-label">持有金额</div>
+            <div class="item-value">{{ formatNum(holdingDetails.amount) }}</div>
+          </div>
+          <div class="holding-item">
+            <div class="item-label">持有份额</div>
+            <div class="item-value">{{ formatNum(holdingDetails.shares) }}</div>
+          </div>
+          <div class="holding-item">
+            <div class="item-label">持仓占比</div>
+            <div class="item-value">{{ holdingDetails.ratio.toFixed(2) }}%</div>
+          </div>
+          <div class="holding-item">
+            <div class="item-label">持有收益</div>
+            <div class="item-value" :class="holdingDetails.profit >= 0 ? 'up' : 'down'">
+              {{ formatNum(holdingDetails.profit) }}
+            </div>
+          </div>
+          <div class="holding-item">
+            <div class="item-label">持有收益率</div>
+            <div class="item-value" :class="holdingDetails.profitRate >= 0 ? 'up' : 'down'">
+              {{ formatPercent(holdingDetails.profitRate) }}
+            </div>
+          </div>
+          <div class="holding-item">
+            <div class="item-label">持仓成本</div>
+            <div class="item-value">{{ holdingDetails.cost.toFixed(4) }}</div>
+          </div>
+          <div class="holding-item">
+            <div class="item-label">当日收益</div>
+            <div class="item-value" :class="holdingDetails.todayProfit >= 0 ? 'up' : 'down'">
+              {{ formatNum(holdingDetails.todayProfit) }}
+            </div>
+          </div>
+          <div class="holding-item">
+            <div class="item-label">昨日收益</div>
+            <div class="item-value" :class="holdingDetails.yesterdayProfit >= 0 ? 'up' : 'down'">
+              {{ formatNum(holdingDetails.yesterdayProfit) }}
+            </div>
+          </div>
+          <div class="holding-item">
+            <div class="item-label">持有天数</div>
+            <div class="item-value">{{ holdingDetails.holdDays }}</div>
+          </div>
+        </div>
+      </transition>
     </div>
 
     <!-- Tab切换 -->
@@ -697,6 +724,51 @@ function formatPercent(num: number): string {
   border-radius: 12px;
   padding: 16px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+
+/* 简要信息（收起时显示） */
+.holding-summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 12px;
+}
+
+.holding-panel.collapsed .holding-summary {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.summary-item {
+  flex: 1;
+  text-align: center;
+}
+
+.summary-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.summary-value {
+  font-size: 15px;
+  font-weight: 600;
+  font-family: 'DIN Alternate', -apple-system, monospace;
+  color: var(--text-primary);
+}
+
+.summary-value.up { color: #f56c6c; }
+.summary-value.down { color: #67c23a; }
+
+.expand-icon {
+  color: var(--text-secondary);
+  transition: transform 0.3s;
 }
 
 .holding-grid {
@@ -725,10 +797,19 @@ function formatPercent(num: number): string {
 .item-value.up { color: #f56c6c; }
 .item-value.down { color: #67c23a; }
 
-.holding-collapse {
-  text-align: center;
-  padding-top: 12px;
-  color: var(--text-secondary);
+/* 展开/收起动画 */
+.slide-enter-active,
+.slide-leave-active {
+  transition: all 0.3s ease;
+  max-height: 300px;
+  opacity: 1;
+  overflow: hidden;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+  max-height: 0;
+  opacity: 0;
 }
 
 /* ========== Tab切换 ========== */
