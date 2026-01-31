@@ -9,7 +9,13 @@ import { useFundStore } from '@/stores/fund'
 import { useHoldingStore } from '@/stores/holding'
 import { fetchStockHoldings, detectShareClass } from '@/api/fund'
 import { fetchFundEstimateFast } from '@/api/fundFast'
-import { fetchPeriodReturnExt, fetchSimilarFunds, fetchSectorFunds, type PeriodReturnExt, type SimilarFund, type SectorInfo } from '@/api/tiantianApi'
+import { 
+  fetchPeriodReturnExt, fetchSimilarFunds, fetchSectorFunds, 
+  fetchDividendRecords, fetchFundFees, fetchFundAnnouncements, fetchFundScale,
+  calculateRedemptionFee,
+  type PeriodReturnExt, type SimilarFund, type SectorInfo,
+  type DividendRecord, type FundFeeInfo, type FundAnnouncement, type FundScale
+} from '@/api/tiantianApi'
 import type { FundEstimate, StockHolding, FundShareClass } from '@/types/fund'
 import { showToast, showConfirmDialog } from 'vant'
 import ProChart from '@/components/OKXChart.vue'
@@ -30,6 +36,12 @@ const similarFunds = ref<SimilarFund[]>([])
 const sectorInfo = ref<SectorInfo | null>(null)
 const isLoading = ref(true)
 const shareClass = ref<FundShareClass>('A')
+
+// [WHAT] 核心功能数据
+const dividendRecords = ref<DividendRecord[]>([])
+const fundFees = ref<FundFeeInfo | null>(null)
+const announcements = ref<FundAnnouncement[]>([])
+const fundScale = ref<FundScale | null>(null)
 
 // [WHAT] 实时刷新
 let refreshTimer: ReturnType<typeof setInterval> | null = null
@@ -101,6 +113,10 @@ watch(fundCode, async (newCode, oldCode) => {
     stockHoldings.value = []
     periodReturns.value = []
     similarFunds.value = []
+    dividendRecords.value = []
+    fundFees.value = null
+    announcements.value = []
+    fundScale.value = null
     isLoading.value = true
     await loadFundData()
   }
@@ -182,6 +198,12 @@ async function loadFundData() {
     fetchPeriodReturnExt(fundCode.value).then(r => periodReturns.value = r).catch(() => {})
     fetchSimilarFunds(fundCode.value).then(f => similarFunds.value = f).catch(() => {})
     fetchSectorFunds().then(s => { if (s.length > 0) sectorInfo.value = s[0]! }).catch(() => {})
+    
+    // [WHAT] 加载核心功能数据：分红、费率、公告、规模
+    fetchDividendRecords(fundCode.value).then(d => dividendRecords.value = d).catch(() => {})
+    fetchFundFees(fundCode.value).then(f => fundFees.value = f).catch(() => {})
+    fetchFundAnnouncements(fundCode.value).then(a => announcements.value = a).catch(() => {})
+    fetchFundScale(fundCode.value).then(s => fundScale.value = s).catch(() => {})
       
   } catch {
     showToast('加载失败')
@@ -298,6 +320,31 @@ function goToSimilarFund(code: string) {
 function searchSimilarFunds() {
   if (sectorInfo.value) {
     router.push(`/search?q=${encodeURIComponent(sectorInfo.value.name)}`)
+  }
+}
+
+// [WHAT] 计算预估赎回费
+const estimatedRedemptionFee = computed(() => {
+  if (!fundFees.value || !holdingDetails.value) return null
+  
+  const days = holdingDetails.value.holdDays
+  const amount = holdingDetails.value.amount
+  const result = calculateRedemptionFee(days, amount, fundFees.value.redemptionFees)
+  
+  return result
+})
+
+// [WHAT] 分红累计金额
+const totalDividend = computed(() => {
+  return dividendRecords.value.reduce((sum, r) => sum + r.amount, 0)
+})
+
+// [WHAT] 打开公告链接
+function openAnnouncement(url: string) {
+  if (url) {
+    window.open(url, '_blank')
+  } else {
+    showToast('暂无详情链接')
   }
 }
 
@@ -554,6 +601,159 @@ function formatPercent(num: number): string {
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- ========== 基金规模 ========== -->
+    <div v-if="fundScale && fundScale.scale > 0" class="info-section">
+      <div class="section-header">
+        <span>基金规模</span>
+        <span class="section-tip">{{ fundScale.scaleDate }}</span>
+      </div>
+      <div class="scale-grid">
+        <div class="scale-item">
+          <div class="scale-value">{{ fundScale.scale.toFixed(2) }}亿</div>
+          <div class="scale-label">资产规模</div>
+        </div>
+        <div class="scale-item">
+          <div class="scale-value">{{ fundScale.shareTotal.toFixed(2) }}亿份</div>
+          <div class="scale-label">总份额</div>
+        </div>
+        <div class="scale-item">
+          <div class="scale-value">{{ fundScale.institutionRatio.toFixed(1) }}%</div>
+          <div class="scale-label">机构持有</div>
+        </div>
+        <div class="scale-item">
+          <div class="scale-value">{{ fundScale.personalRatio.toFixed(1) }}%</div>
+          <div class="scale-label">个人持有</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 费率信息 ========== -->
+    <div v-if="fundFees" class="info-section">
+      <div class="section-header">
+        <span>费率信息</span>
+      </div>
+      <div class="fee-grid">
+        <div class="fee-item">
+          <div class="fee-label">管理费</div>
+          <div class="fee-value">{{ fundFees.managementFee.toFixed(2) }}%/年</div>
+        </div>
+        <div class="fee-item">
+          <div class="fee-label">托管费</div>
+          <div class="fee-value">{{ fundFees.custodianFee.toFixed(2) }}%/年</div>
+        </div>
+        <div class="fee-item" v-if="fundFees.salesServiceFee > 0">
+          <div class="fee-label">销售服务费</div>
+          <div class="fee-value">{{ fundFees.salesServiceFee.toFixed(2) }}%/年</div>
+        </div>
+      </div>
+      
+      <!-- 申购费率 -->
+      <div class="fee-table">
+        <div class="table-title">申购费率</div>
+        <div class="table-row header">
+          <span>金额</span>
+          <span>原费率</span>
+          <span>优惠费率</span>
+        </div>
+        <div 
+          v-for="(fee, idx) in fundFees.purchaseFees.slice(0, 4)" 
+          :key="'p' + idx"
+          class="table-row"
+        >
+          <span>
+            {{ fee.maxAmount === Infinity 
+              ? `≥${fee.minAmount}万` 
+              : `${fee.minAmount}-${fee.maxAmount}万` }}
+          </span>
+          <span>{{ fee.rate >= 1000 ? `${fee.rate}元` : `${fee.rate}%` }}</span>
+          <span class="discount">{{ fee.discountRate >= 1000 ? `${fee.discountRate}元` : `${fee.discountRate}%` }}</span>
+        </div>
+      </div>
+      
+      <!-- 赎回费率 -->
+      <div class="fee-table">
+        <div class="table-title">赎回费率</div>
+        <div class="table-row header">
+          <span>持有期限</span>
+          <span>费率</span>
+        </div>
+        <div 
+          v-for="(fee, idx) in fundFees.redemptionFees" 
+          :key="'r' + idx"
+          class="table-row"
+        >
+          <span>
+            {{ fee.maxDays === Infinity 
+              ? `≥${fee.minDays}天` 
+              : fee.minDays === 0 
+                ? `<${fee.maxDays}天`
+                : `${fee.minDays}-${fee.maxDays}天` }}
+          </span>
+          <span :class="{ free: fee.rate === 0 }">{{ fee.rate === 0 ? '免费' : `${fee.rate}%` }}</span>
+        </div>
+      </div>
+      
+      <!-- 持仓赎回费预估 -->
+      <div v-if="estimatedRedemptionFee && holdingDetails" class="redemption-estimate">
+        <div class="estimate-info">
+          <span>当前持有 {{ holdingDetails.holdDays }} 天，赎回费率 {{ estimatedRedemptionFee.rate }}%</span>
+        </div>
+        <div class="estimate-fee">
+          预估赎回费: <span class="fee-amount">¥{{ estimatedRedemptionFee.fee.toFixed(2) }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 分红记录 ========== -->
+    <div class="info-section">
+      <div class="section-header">
+        <span>分红记录</span>
+        <span class="section-tip" v-if="dividendRecords.length > 0">
+          累计{{ dividendRecords.length }}次，共{{ totalDividend.toFixed(4) }}元/份
+        </span>
+      </div>
+      <div v-if="dividendRecords.length > 0" class="dividend-list">
+        <div 
+          v-for="(record, idx) in dividendRecords.slice(0, 5)" 
+          :key="idx"
+          class="dividend-item"
+        >
+          <div class="dividend-date">{{ record.date }}</div>
+          <div class="dividend-amount">每份派{{ record.amount.toFixed(4) }}元</div>
+          <div class="dividend-type">{{ record.type }}</div>
+        </div>
+        <div v-if="dividendRecords.length > 5" class="more-hint">
+          还有{{ dividendRecords.length - 5 }}条记录...
+        </div>
+      </div>
+      <div v-else class="empty-hint">暂无分红记录</div>
+    </div>
+
+    <!-- ========== 基金公告 ========== -->
+    <div class="info-section">
+      <div class="section-header">
+        <span>基金公告</span>
+      </div>
+      <div v-if="announcements.length > 0" class="announcement-list">
+        <div 
+          v-for="item in announcements.slice(0, 5)" 
+          :key="item.id"
+          class="announcement-item"
+          @click="openAnnouncement(item.url)"
+        >
+          <div class="announcement-type" :class="item.type">
+            {{ item.type === '分红公告' ? '分红' : item.type === '定期报告' ? '报告' : item.type === '人事变动' ? '人事' : '公告' }}
+          </div>
+          <div class="announcement-content">
+            <div class="announcement-title">{{ item.title }}</div>
+            <div class="announcement-date">{{ item.date }}</div>
+          </div>
+          <van-icon name="arrow" class="announcement-arrow" />
+        </div>
+      </div>
+      <div v-else class="empty-hint">暂无公告</div>
     </div>
 
     <!-- 底部操作栏 -->
@@ -1039,6 +1239,263 @@ function formatPercent(num: number): string {
 
 .similar-return.up { color: #f56c6c; }
 .similar-return.down { color: #67c23a; }
+
+/* ========== 信息区块通用样式 ========== */
+.info-section {
+  background: var(--bg-secondary);
+  margin: 12px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* ========== 基金规模 ========== */
+.scale-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding: 12px 8px;
+  gap: 8px;
+}
+
+.scale-item {
+  text-align: center;
+}
+
+.scale-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: 'DIN Alternate', -apple-system, monospace;
+}
+
+.scale-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* ========== 费率信息 ========== */
+.fee-grid {
+  display: flex;
+  padding: 12px 16px;
+  gap: 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.fee-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fee-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.fee-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.fee-table {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.fee-table:last-of-type {
+  border-bottom: none;
+}
+
+.table-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.table-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.table-row.header {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+}
+
+.table-row span {
+  flex: 1;
+  text-align: center;
+}
+
+.table-row span:first-child {
+  text-align: left;
+}
+
+.table-row .discount {
+  color: #f56c6c;
+  font-weight: 500;
+}
+
+.table-row .free {
+  color: #67c23a;
+  font-weight: 500;
+}
+
+.redemption-estimate {
+  padding: 12px 16px;
+  background: var(--bg-tertiary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.estimate-info {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.estimate-fee {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.fee-amount {
+  font-weight: 600;
+  color: #f56c6c;
+}
+
+/* ========== 分红记录 ========== */
+.dividend-list {
+  padding: 8px 16px 12px;
+}
+
+.dividend-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.dividend-item:last-child {
+  border-bottom: none;
+}
+
+.dividend-date {
+  font-size: 13px;
+  color: var(--text-secondary);
+  width: 90px;
+}
+
+.dividend-amount {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.dividend-type {
+  font-size: 11px;
+  color: #f56c6c;
+  background: rgba(245, 108, 108, 0.1);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.more-hint {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  padding: 8px 0;
+}
+
+.empty-hint {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-tertiary);
+  padding: 20px;
+}
+
+/* ========== 基金公告 ========== */
+.announcement-list {
+  padding: 8px 16px 12px;
+}
+
+.announcement-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+}
+
+.announcement-item:last-child {
+  border-bottom: none;
+}
+
+.announcement-item:active {
+  opacity: 0.7;
+}
+
+.announcement-type {
+  font-size: 10px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  margin-right: 10px;
+  white-space: nowrap;
+}
+
+.announcement-type.分红公告 {
+  background: rgba(245, 108, 108, 0.1);
+  color: #f56c6c;
+}
+
+.announcement-type.定期报告 {
+  background: rgba(64, 158, 255, 0.1);
+  color: #409eff;
+}
+
+.announcement-type.人事变动 {
+  background: rgba(230, 162, 60, 0.1);
+  color: #e6a23c;
+}
+
+.announcement-type.其他公告 {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.announcement-content {
+  flex: 1;
+  overflow: hidden;
+}
+
+.announcement-title {
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.announcement-date {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+}
+
+.announcement-arrow {
+  color: var(--text-tertiary);
+  margin-left: 8px;
+}
 
 /* ========== 底部操作栏 ========== */
 .bottom-bar {

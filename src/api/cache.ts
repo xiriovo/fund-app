@@ -64,4 +64,6 @@ export const CACHE_TTL = {
   FUND_DETAIL: 300000,  // 基金详情 5分钟
   MARKET_INDEX: 3000,   // 大盘指数 3秒
   FUND_INFO: 300000,    // 基金/经理信息 5分钟
+  SHORT: 60000,         // 短期缓存 1分钟
+  LONG: 3600000,        // 长期缓存 1小时
 }
