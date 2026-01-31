@@ -86,7 +86,7 @@ export function fetchFundEstimate(code: string): Promise<FundEstimate> {
     const script = document.createElement('script')
     script.id = scriptId
     // [DEPS] 天天基金公开接口，返回格式：jsonpgz({...})
-    script.src = `https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`
+    script.src = `API_ENDPOINT/js/${code}.js?rt=${Date.now()}`
     script.onerror = () => {
       cleanup()
       const index = pendingRequests.findIndex(req => req.code === code)
@@ -186,7 +186,7 @@ async function fetchFundListFromRemote(): Promise<FundInfo[]> {
 
     const script = document.createElement('script')
     script.id = callbackName
-    script.src = `https://fund.eastmoney.com/js/fundcode_search.js?rt=${Date.now()}`
+    script.src = `API_ENDPOINT/js/fundcode_search.js?rt=${Date.now()}`
     script.onload = () => {
       cleanup()
       const rawData = (window as any).r
@@ -428,7 +428,7 @@ export async function fetchNetValueHistory(
     const script = document.createElement('script')
     script.id = callbackName
     // [DEPS] 东方财富历史净值接口
-    script.src = `https://api.fund.eastmoney.com/f10/lsjz?callback=${callbackName}&fundCode=${code}&pageIndex=1&pageSize=${pageSize}&_=${Date.now()}`
+    script.src = `API_ENDPOINT/f10/lsjz?callback=${callbackName}&fundCode=${code}&pageIndex=1&pageSize=${pageSize}&_=${Date.now()}`
     script.onerror = () => {
       cleanup()
       reject(new Error('获取历史净值失败'))
@@ -475,7 +475,7 @@ export async function fetchStockHoldings(code: string): Promise<StockHolding[]> 
     const script = document.createElement('script')
     script.id = callbackName
     // [DEPS] 东方财富重仓股接口
-    script.src = `https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=${code}&topline=10&year=&month=&callback=${callbackName}&_=${Date.now()}`
+    script.src = `API_ENDPOINT/FundArchivesDatas.aspx?type=jjcc&code=${code}&topline=10&year=&month=&callback=${callbackName}&_=${Date.now()}`
     script.onerror = () => {
       cleanup()
       reject(new Error('获取重仓股失败'))
@@ -572,7 +572,7 @@ export async function fetchMarketIndices(): Promise<MarketIndex[]> {
     const script = document.createElement('script')
     script.id = callbackName
     // [WHAT] 请求上证指数(1.000001)、深证成指(0.399001)、创业板指(0.399006)、科创50(1.000688)
-    script.src = `https://push2.eastmoney.com/api/qt/ulist.np/get?cb=${callbackName}&fltt=2&secids=1.000001,0.399001,0.399006,1.000688&fields=f2,f3,f4,f6,f12,f14&_=${Date.now()}`
+    script.src = `API_ENDPOINT/api/qt/ulist.np/get?cb=${callbackName}&fltt=2&secids=1.000001,0.399001,0.399006,1.000688&fields=f2,f3,f4,f6,f12,f14&_=${Date.now()}`
     script.onerror = () => {
       cleanup()
       resolve([])
@@ -634,7 +634,7 @@ export async function fetchFundRanking(
     const script = document.createElement('script')
     script.id = callbackName
     // [DEPS] 东方财富基金排行接口
-    script.src = `https://fund.eastmoney.com/data/rankhandler.aspx?op=ph&dt=kf&ft=all&rs=&gs=0&sc=${sortType}&st=${order}&pi=1&pn=${pageSize}&dx=1&callback=${callbackName}&_=${Date.now()}`
+    script.src = `API_ENDPOINT/data/rankhandler.aspx?op=ph&dt=kf&ft=all&rs=&gs=0&sc=${sortType}&st=${order}&pi=1&pn=${pageSize}&dx=1&callback=${callbackName}&_=${Date.now()}`
     script.onerror = () => {
       cleanup()
       resolve([])
@@ -743,7 +743,7 @@ export async function fetchTimeShareData(code: string): Promise<TimeShareData[]>
     const script = document.createElement('script')
     script.id = callbackName
     // [DEPS] 天天基金分时估值接口
-    script.src = `https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`
+    script.src = `API_ENDPOINT/js/${code}.js?rt=${Date.now()}`
     script.onerror = () => {
       cleanup()
       resolve([])
@@ -822,7 +822,7 @@ export async function fetchFundFeeInfo(code: string): Promise<FundFeeInfo | null
     const script = document.createElement('script')
     script.id = callbackName
     // [DEPS] 天天基金费率接口
-    script.src = `https://fundgz.1234567.com.cn/FundNew/GetFundMJJZ?callback=${callbackName}&fcode=${code}&_=${Date.now()}`
+    script.src = `API_ENDPOINT/FundNew/GetFundMJJZ?callback=${callbackName}&fcode=${code}&_=${Date.now()}`
     script.onerror = () => {
       cleanup()
       resolve(getDefaultFeeInfo(code))
@@ -1028,7 +1028,7 @@ export async function fetchFundDetailInfo(code: string): Promise<FundDetailInfo 
 
     const script = document.createElement('script')
     script.id = callbackName
-    script.src = `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNDetailInformation?callback=${callbackName}&FCODE=${code}&_=${Date.now()}`
+    script.src = `API_ENDPOINT/FundMNewApi/FundMNDetailInformation?callback=${callbackName}&FCODE=${code}&_=${Date.now()}`
     script.onerror = () => {
       cleanup()
       resolve(null)
@@ -1066,7 +1066,7 @@ export async function fetchPeriodChanges(code: string): Promise<PeriodChangeData
     // [WHAT] 尝试从pingzhongdata获取收益率数据
     const script = document.createElement('script')
     script.id = scriptId
-    script.src = `https://fund.eastmoney.com/pingzhongdata/${code}.js?_=${Date.now()}`
+    script.src = `API_ENDPOINT/pingzhongdata/${code}.js?_=${Date.now()}`
     
     script.onload = () => {
       cleanup()
@@ -1245,7 +1245,7 @@ export async function fetchFundManagerInfo(managerId: string): Promise<FundManag
 
     const script = document.createElement('script')
     script.id = callbackName
-    script.src = `https://fundmobapi.eastmoney.com/FundMNewApi/FundMSNMangerInfo?callback=${callbackName}&FCODE=${managerId}&_=${Date.now()}`
+    script.src = `API_ENDPOINT/FundMNewApi/FundMSNMangerInfo?callback=${callbackName}&FCODE=${managerId}&_=${Date.now()}`
     script.onerror = () => {
       cleanup()
       resolve(null)
@@ -1299,7 +1299,7 @@ export async function fetchRankTrend(code: string, range = '1n'): Promise<RankTr
 
     const script = document.createElement('script')
     script.id = callbackName
-    script.src = `https://fundmobapi.eastmoney.com/FundMNewApi/FundRankDiagram?callback=${callbackName}&FCODE=${code}&RANGE=${range}&_=${Date.now()}`
+    script.src = `API_ENDPOINT/FundMNewApi/FundRankDiagram?callback=${callbackName}&FCODE=${code}&RANGE=${range}&_=${Date.now()}`
     script.onerror = () => {
       cleanup()
       resolve([])
@@ -1359,7 +1359,7 @@ export async function fetchAccumulatedReturn(
 
     const script = document.createElement('script')
     script.id = callbackName
-    script.src = `https://fundmobapi.eastmoney.com/FundMNewApi/FundVPageAcc?callback=${callbackName}&FCODE=${code}&RANGE=${range}&INDEXCODE=${indexCode}&_=${Date.now()}`
+    script.src = `API_ENDPOINT/FundMNewApi/FundVPageAcc?callback=${callbackName}&FCODE=${code}&RANGE=${range}&INDEXCODE=${indexCode}&_=${Date.now()}`
     script.onerror = () => {
       cleanup()
       resolve([])

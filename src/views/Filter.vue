@@ -94,7 +94,7 @@ async function loadFunds(reset = false) {
   try {
     const typeCode = fundType.value ? getTypeCode(fundType.value) : ''
     const sortField = getSortField(sortBy.value)
-    const url = `https://fund.eastmoney.com/data/rankhandler.aspx?op=ph&dt=kf&ft=${typeCode}&rs=&gs=0&sc=${sortField}&st=desc&pi=${page.value}&pn=${pageSize}&dx=1&v=${Date.now()}`
+    const url = `API_ENDPOINT/data/rankhandler.aspx?op=ph&dt=kf&ft=${typeCode}&rs=&gs=0&sc=${sortField}&st=desc&pi=${page.value}&pn=${pageSize}&dx=1&v=${Date.now()}`
     
     // [WHY] 使用简单的 Promise + setTimeout 避免阻塞
     const response = await new Promise<FilteredFund[]>((resolve) => {

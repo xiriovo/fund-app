@@ -11,7 +11,7 @@
 const isDev = import.meta.env.DEV
 const REMOTE_CONFIG_URL = isDev 
   ? '/config/announcement.json'
-  : 'https://xiriovo.github.io/fund-app/config/announcement.json'
+  : 'API_ENDPOINT/config/announcement.json'
 
 /**
  * 公告类型

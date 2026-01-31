@@ -149,7 +149,7 @@ export function fetchFundEstimateFast(code: string): Promise<FundEstimate> {
       
       const script = document.createElement('script')
       script.id = scriptId
-      script.src = `https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`
+      script.src = `API_ENDPOINT/js/${code}.js?rt=${Date.now()}`
       script.onerror = () => {
         // [NOTE] 静默处理脚本加载失败，某些基金类型不支持估值
         cleanup()
@@ -211,7 +211,7 @@ export async function fetchNetValueHistoryFast(code: string, days = 30): Promise
     const script = document.createElement('script')
     script.id = scriptId
     // [WHY] pingzhongdata.js 包含 Data_netWorthTrend 变量
-    script.src = `https://fund.eastmoney.com/pingzhongdata/${code}.js?v=${Date.now()}`
+    script.src = `API_ENDPOINT/pingzhongdata/${code}.js?v=${Date.now()}`
     
     script.onload = () => {
       cleanup()
@@ -385,7 +385,7 @@ export async function fetchMarketIndicesFast(): Promise<MarketIndexSimple[]> {
   
   try {
     // [WHAT] 添加沪深300指数 (1.000300)
-    const url = 'https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&secids=1.000001,0.399001,0.399006,1.000300&fields=f2,f3,f4,f12,f14'
+    const url = 'API_ENDPOINT/api/qt/ulist.np/get?fltt=2&secids=1.000001,0.399001,0.399006,1.000300&fields=f2,f3,f4,f12,f14'
     const response = await fetch(url)
     const data = await response.json()
     
@@ -457,7 +457,7 @@ export async function fetchFundManagerInfo(fundCode: string): Promise<FundManage
     
     const script = document.createElement('script')
     script.id = scriptId
-    script.src = `https://fund.eastmoney.com/pingzhongdata/${fundCode}.js?v=${Date.now()}`
+    script.src = `API_ENDPOINT/pingzhongdata/${fundCode}.js?v=${Date.now()}`
     
     script.onload = () => {
       cleanup()
@@ -543,7 +543,7 @@ export async function fetchFundRankingFast(
   
   try {
     // [WHY] 使用push2接口获取场内基金排行（ETF/LOF等）
-    const url = `https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=${pageSize}&po=${order}&np=1&fltt=2&invt=2&fid=f3&fs=b:MK0021&fields=f2,f3,f4,f12,f14&_=${Date.now()}`
+    const url = `API_ENDPOINT/api/qt/clist/get?pn=1&pz=${pageSize}&po=${order}&np=1&fltt=2&invt=2&fid=f3&fs=b:MK0021&fields=f2,f3,f4,f12,f14&_=${Date.now()}`
     
     const response = await fetch(url)
     const data = await response.json()
@@ -591,7 +591,7 @@ export async function fetchManagerProfit(fundCode: string): Promise<ManagerProfi
     
     const script = document.createElement('script')
     script.id = scriptId
-    script.src = `https://fund.eastmoney.com/pingzhongdata/${fundCode}.js?v=${Date.now()}`
+    script.src = `API_ENDPOINT/pingzhongdata/${fundCode}.js?v=${Date.now()}`
     
     script.onload = () => {
       cleanup()
