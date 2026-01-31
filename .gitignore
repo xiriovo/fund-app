@@ -37,3 +37,6 @@ android/*.iml
 
 # Capacitor
 capacitor.config.json
+
+# API配置（包含敏感接口地址）
+src/config/apiEndpoints.ts
