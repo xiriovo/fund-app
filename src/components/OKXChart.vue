@@ -72,40 +72,47 @@ const filteredData = computed(() => {
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   
-  // [WHY] 当日模式：显示昨日完整曲线 + 今日实时（如果有）
+  // [WHY] 当日模式：只显示昨日 + 今日（如果有）
   if (showIntradayChart.value) {
-    // [WHAT] 获取最近7天的数据，确保有足够的点绘制平滑曲线
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-    let data = chartData.value
-      .filter(item => new Date(item.time) >= weekAgo)
-      .map((item, i) => ({ 
-        ...item, 
-        volume: 50 + Math.abs(item.change) * 30 + (i % 5) * 10
-      }))
+    // [WHAT] 获取所有数据，按时间排序
+    const sortedData = [...chartData.value].sort((a, b) => 
+      new Date(a.time).getTime() - new Date(b.time).getTime()
+    )
     
     // [WHY] 检查今天是否有数据（收盘后才有）
-    const hasTodayData = data.some(d => d.time === today)
+    const hasTodayData = sortedData.some(d => d.time === today)
     
     // [WHAT] 判断是否在交易时间内有实时数据
     const hasRealtimeData = props.realtimeValue > 0 && isTradingTime()
     
-    if (hasRealtimeData && !hasTodayData) {
-      // [WHAT] 交易中：添加今日实时数据点
-      data = [...data, {
-        time: today,
-        value: props.realtimeValue,
-        change: props.realtimeChange,
-        volume: 100
-      }]
-    } else if (hasRealtimeData && hasTodayData) {
-      // [WHAT] 更新今日数据为实时值
-      data = data.map(d => d.time === today ? {
-        ...d,
-        value: props.realtimeValue,
-        change: props.realtimeChange
-      } : d)
+    let data: SimpleKLineData[] = []
+    
+    if (hasTodayData) {
+      // [WHAT] 有今日收盘数据：取昨天和今天
+      const todayIdx = sortedData.findIndex(d => d.time === today)
+      const yesterdayIdx = todayIdx > 0 ? todayIdx - 1 : 0
+      data = sortedData.slice(yesterdayIdx, todayIdx + 1)
+    } else {
+      // [WHAT] 没有今日数据：取最后一天（昨天）
+      if (sortedData.length > 0) {
+        data = [sortedData[sortedData.length - 1]!]
+      }
+      
+      // [WHAT] 如果有实时数据，添加今日点
+      if (hasRealtimeData) {
+        data = [...data, {
+          time: today,
+          value: props.realtimeValue,
+          change: props.realtimeChange
+        }]
+      }
     }
-    // [EDGE] 非交易时间且今天没收盘数据：显示历史数据，等待更新
+    
+    // [WHAT] 添加volume字段
+    data = data.map((item, i) => ({
+      ...item,
+      volume: 50 + Math.abs(item.change) * 30 + (i % 5) * 10
+    }))
     
     // [EDGE] 如果没有数据，返回占位数据
     if (data.length === 0) {
